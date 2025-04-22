@@ -1,5 +1,5 @@
 import { View, ScrollView, Text, TouchableOpacity, Alert } from 'react-native';
-import styles from './styles';
+import styles from '@styles/summaryStep';
 import { auth, db } from '@lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 

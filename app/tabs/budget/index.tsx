@@ -145,5 +145,76 @@ export default function BudgetScreen() {
         <ScrollView contentContainerStyle={styles.container}>
             <View style={styles.header}>
                 <BudgetSelector onBudgetChange={handleBudgetChange} selectedBudget={selectedBudget} />
-                <TouchableOpacity>
+                <TouchableOpacity onPress={() => setIsEditing((prev) => !prev)}>
+                    <Feather name={isEditing ? 'check' : 'edit'} size={24} color="#555" />
+                </TouchableOpacity>
+            </View>
 
+            <View style={styles.periodHeader}>
+                <TouchableOpacity onPress={() => changePeriod('prev')}>
+                    <Text style={styles.navArrow}>{'<'}</Text>
+                </TouchableOpacity>
+                <Text style={styles.periodText}>
+                    {`${dayjs(start).format('D MMM')} - ${dayjs(end).format('D MMM')}`}
+                </Text>
+                <TouchableOpacity onPress={() => changePeriod('next')}>
+                    <Text style={styles.navArrow}>{'>'}</Text>
+                </TouchableOpacity>
+            </View>
+
+            <View style={styles.card}>
+                <TouchableOpacity onPress={toggleChart}>
+                    <Text style={styles.cardTitle}>TOTAL PLANNED EXPENSES</Text>
+                    <Text style={styles.cardValue}>{totalPlanned} RON</Text>
+                    <Text style={styles.cardSubtitle}>{remaining} RON left to budget</Text>
+                </TouchableOpacity>
+
+                {showChart && (
+                    <View style={styles.chartContainer}>
+                        <Text style={{ fontWeight: 'bold', marginBottom: 8, color: '#333' }}>
+                            📊 Category Breakdown
+                        </Text>
+                        <PieChart
+                            data={getChartData()}
+                            width={400}
+                            height={180}
+                            accessor="amount"
+                            backgroundColor="transparent"
+                            paddingLeft="15"
+                            center={[0, 0]}
+                            absolute
+                            chartConfig={{
+                                color: () => '#000',
+                                labelColor: () => '#333',
+                            }}
+                        />
+                    </View>
+                )}
+            </View>
+
+            <Text style={styles.section}>Income</Text>
+            {budgetData.incomes.map((inc: any, i: number) => (
+                <View key={i} style={styles.itemRow}>
+                    <Text style={styles.itemText}>{inc.type}</Text>
+                    <Text style={styles.itemText}>{inc.amount} RON</Text>
+                </View>
+            ))}
+
+            {isEditing ? (
+                <EditBudget categories={budgetData.categories} onChange={handleEditChange} />
+            ) : (
+                budgetData.categories.map((cat: any, i: number) => (
+                    <View key={i}>
+                        <Text style={styles.section}>{cat.name}</Text>
+                        {cat.subcategories.map((sub: any, j: number) => (
+                            <View key={j} style={styles.itemRow}>
+                                <Text style={styles.itemText}>{sub.name}</Text>
+                                <Text style={styles.itemText}>{sub.amount} RON</Text>
+                            </View>
+                        ))}
+                    </View>
+                ))
+            )}
+        </ScrollView>
+    );
+}

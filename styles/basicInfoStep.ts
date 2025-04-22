@@ -1,0 +1,82 @@
+import { StyleSheet } from 'react-native';
+
+export default StyleSheet.create({
+    wrapper: {
+        flex: 1,
+        backgroundColor: '#FFF8EC',
+    },
+    container: {
+        padding: 24,
+        paddingBottom: 80,
+    },
+    bgImage: {
+        width: '100%',
+        height: 160,
+        marginBottom: 10,
+    },
+    title: {
+        fontSize: 28,
+        fontWeight: '900',
+        color: '#1E1E1E',
+        marginBottom: 6,
+        textAlign: 'center',
+        fontFamily: 'Comic Neue',
+    },
+    subtitle: {
+        fontSize: 16,
+        color: '#777',
+        textAlign: 'center',
+        marginBottom: 20,
+        fontStyle: 'italic',
+    },
+    label: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        backgroundColor: '#FFE082',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+        color: '#3A3A3A',
+        marginTop: 16,
+        marginBottom: 6,
+        alignSelf: 'flex-start',
+    },
+    input: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        padding: 14,
+        fontSize: 16,
+        borderWidth: 2,
+        borderColor: '#FFDA7B',
+        color: '#2C2C2C',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+    },
+    dropdown: {
+        backgroundColor: '#FFFFFF',
+        borderColor: '#FFDA7B',
+        borderRadius: 14,
+    },
+    dropdownContainer: {
+        borderColor: '#FFDA7B',
+        borderRadius: 14,
+    },
+    button: {
+        marginTop: 30,
+        backgroundColor: '#FFBC42',
+        padding: 16,
+        borderRadius: 20,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOpacity: 0.15,
+        shadowOffset: { width: 0, height: 3 },
+        shadowRadius: 5,
+    },
+    buttonText: {
+        color: '#1E1E1E',
+        fontWeight: '800',
+        fontSize: 18,
+    },
+});

@@ -10,25 +10,29 @@ import {
     Dimensions
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Feather } from '@expo/vector-icons';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 
 type BudgetSelectorProps = {
     onBudgetChange?: (id: string | null) => void;
     onNewBudget?: () => void;
+    selectedBudget?: string | null;
 };
 
-export default function BudgetSelector({ onBudgetChange, onNewBudget }: BudgetSelectorProps) {
+export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBudget }: BudgetSelectorProps) {
     const [modalVisible, setModalVisible] = useState(false);
-    const [budgets, setBudgets] = useState([]);
-    const [selectedId, setSelectedId] = useState<string | null>(null);
-
+    const [budgets, setBudgets] = useState<any[]>([]);
+    const [selectedId, setSelectedId] = useState<string | null>(selectedBudget || null);
+    const selectedName = budgets.find((b) => b.id === selectedId)?.name ?? 'Switch Budget';
 
     useEffect(() => {
         const loadSelected = async () => {
             const stored = await AsyncStorage.getItem('selectedBudget');
-            if (stored) setSelectedId(stored);
-            onBudgetChange?.(stored);
+            if (stored) {
+                setSelectedId(stored);
+                onBudgetChange?.(stored);
+            }
         };
         loadSelected();
     }, []);
@@ -45,7 +49,7 @@ export default function BudgetSelector({ onBudgetChange, onNewBudget }: BudgetSe
         fetchBudgets();
     }, [modalVisible]);
 
-    const handleSelect = async (id) => {
+    const handleSelect = async (id: string) => {
         setSelectedId(id);
         await AsyncStorage.setItem('selectedBudget', id);
         setModalVisible(false);
@@ -53,9 +57,10 @@ export default function BudgetSelector({ onBudgetChange, onNewBudget }: BudgetSe
     };
 
     return (
-        <View>
-            <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.trigger}>
-                <Text style={styles.triggerText}>📂 Switch Budget</Text>
+        <>
+            <TouchableOpacity style={styles.bar} onPress={() => setModalVisible(true)}>
+                <Text style={styles.barText}>📁 {selectedName}</Text>
+                <Feather name="chevron-down" size={20} color="#333" style={styles.arrowIcon} />
             </TouchableOpacity>
 
             <Modal
@@ -89,36 +94,43 @@ export default function BudgetSelector({ onBudgetChange, onNewBudget }: BudgetSe
                     <TouchableOpacity
                         style={styles.addButton}
                         onPress={() => {
-                            console.log('🟢 Add New Budget pressed!');
                             setModalVisible(false);
-                            onNewBudget?.(); // trigger navigare
+                            onNewBudget?.();
                         }}
                     >
                         <Text style={styles.addButtonText}>➕ Add New Budget</Text>
                     </TouchableOpacity>
-
                 </View>
             </Modal>
-        </View>
+        </>
     );
 }
 
-const { height } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
-    trigger: {
+    bar: {
+        width: '100%',
         backgroundColor: '#dfe6e9',
-        padding: 10,
-        borderRadius: 10,
-        marginVertical: 10,
+        padding: 12,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
     },
-    triggerText: {
+    barText: {
         fontWeight: 'bold',
         fontSize: 16,
+        color: '#000',
+    },
+    arrowIcon: {
+        position: 'absolute',
+        right: 16,
     },
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+        backgroundColor: 'rgba(0,0,0,0.3)',
     },
     modalView: {
         position: 'absolute',
@@ -129,11 +141,6 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
     },
     title: {
         fontSize: 18,
@@ -162,8 +169,7 @@ const styles = StyleSheet.create({
         borderColor: '#b2bec3',
     },
     addButtonText: {
-        color: 'rgba(99, 110, 114, 0.6)',
+        color: '#636e72',
         fontWeight: 'bold',
-        fontSize: 15,
     },
 });

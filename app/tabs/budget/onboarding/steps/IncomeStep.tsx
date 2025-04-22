@@ -1,6 +1,6 @@
 import { View, Text, TextInput, TouchableOpacity, FlatList, Image } from 'react-native';
 import { useState } from 'react';
-import styles from './styles';
+import styles from '@styles/incomeStep';
 
 const icons = {
     salary: require('@assets/icons/salary.png'),
