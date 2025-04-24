@@ -3,11 +3,11 @@ import { useState } from 'react';
 import styles from '@styles/incomeStep';
 
 const icons = {
-    salary: require('@assets/icons/salary.png'),
-    investments: require('@assets/icons/pension.png'),
-    freelance: require('@assets/icons/freelance.png'),
-    pension: require('@assets/icons/pension.png'),
-    other: require('@assets/icons/pension.png'),
+    salary: require('@assets/icons/income.png'),
+    investments: require('@assets/icons/income.png'),
+    freelance: require('@assets/icons/income.png'),
+    pension: require('@assets/icons/income.png'),
+    other: require('@assets/icons/income.png'),
 };
 
 const incomeTypes = [

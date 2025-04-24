@@ -59,7 +59,7 @@ export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBu
     return (
         <>
             <TouchableOpacity style={styles.bar} onPress={() => setModalVisible(true)}>
-                <Text style={styles.barText}>📁 {selectedName}</Text>
+                <Text style={styles.barText}>❤{selectedName}</Text>
                 <Feather name="chevron-down" size={20} color="#333" style={styles.arrowIcon} />
             </TouchableOpacity>
 
@@ -110,14 +110,15 @@ const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
     bar: {
-        width: '100%',
+        width: '87%',
         backgroundColor: '#dfe6e9',
-        padding: 12,
+        padding: 10,
         borderRadius: 12,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 16,
+        marginLeft: 19,
     },
     barText: {
         fontWeight: 'bold',

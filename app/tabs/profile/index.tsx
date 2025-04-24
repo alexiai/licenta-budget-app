@@ -1,6 +1,6 @@
 import { View, Text, TextInput, TouchableOpacity, Switch, Alert, Image, ScrollView } from 'react-native';
 import { useEffect, useState } from 'react';
-import { auth, db } from '../../../lib/firebase';
+import { auth, db } from '@lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { useRouter } from 'expo-router';
@@ -66,6 +66,11 @@ export default function MyProfileScreen() {
         }
     };
 
+    const handleLogout = async () => {
+        await auth.signOut();
+        router.replace('/welcome');
+    };
+
     return (
         <ScrollView contentContainerStyle={styles.container}>
             <Text style={styles.title}>👤 My Profile</Text>
@@ -109,6 +114,10 @@ export default function MyProfileScreen() {
                 onPress={() => router.push('/support')}
             >
                 <Text style={styles.itemBtnText}>Support</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+                <Text style={styles.logoutText}>Log Out</Text>
             </TouchableOpacity>
         </ScrollView>
     );

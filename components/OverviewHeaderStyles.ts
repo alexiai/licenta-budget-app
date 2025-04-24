@@ -2,31 +2,32 @@ import { StyleSheet } from 'react-native';
 
 export default StyleSheet.create({
     headerContainer: {
-        marginBottom: 16,
         zIndex: 1000,
-    },
-    dropdown: {
-        marginBottom: 12,
-        zIndex: 1001,
+        marginLeft: 10,
     },
     switchRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
         marginBottom: 10,
+        borderRadius: 7,
+        overflow: 'hidden',
     },
     switchBtn: {
-        flex: 1,
-        marginHorizontal: 4,
-        paddingVertical: 10,
-        borderRadius: 8,
-        backgroundColor: '#eee',
+        width: 95,
+        paddingVertical: 8,
+        borderRadius: 6,
+        backgroundColor: '#fff3cd',
         alignItems: 'center',
+        borderRightWidth: 0.5,
+        borderRightColor: '#ccc',
     },
     switchBtnActive: {
-        backgroundColor: '#6c5ce7',
+        backgroundColor: '#6c488e',
     },
     switchText: {
         fontWeight: 'bold',
-        color: '#fff',
+        color: '#d2c1ad',
+        fontSize: 17,
+        letterSpacing: -0.7
     },
 });

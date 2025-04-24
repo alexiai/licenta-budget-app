@@ -1,10 +1,12 @@
-import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ImageBackground } from 'react-native';
 import { useState } from 'react';
 import { useRouter, Link } from 'expo-router';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../../../lib/firebase';
+import { auth, db } from '@lib/firebase';
 import styles from './styles';
+import { Ionicons } from '@expo/vector-icons';
+import bg from '@assets/bg/signup-bunny.png';
 
 export default function SignupScreen() {
     const router = useRouter();
@@ -13,6 +15,7 @@ export default function SignupScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
 
     const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     const validatePassword = (pass: string) => /^(?=.*[0-9])(?=.*[!@#$%^&*])[A-Za-z0-9!@#$%^&*]{8,}$/.test(pass);
@@ -38,17 +41,58 @@ export default function SignupScreen() {
     };
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Sign Up</Text>
-            <TextInput style={styles.input} placeholder="First Name" value={name} onChangeText={setName} />
-            <TextInput style={styles.input} placeholder="Last Name" value={surname} onChangeText={setSurname} />
-            <TextInput style={styles.input} placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
-            <TextInput style={styles.input} placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry />
-            {!!error && <Text style={styles.error}>{error}</Text>}
-            <TouchableOpacity style={styles.button} onPress={handleSignup}>
-                <Text style={styles.buttonText}>SIGN UP</Text>
-            </TouchableOpacity>
-            <Link href="/auth/login"><Text style={styles.link}>Already have an account? Log in</Text></Link>
-        </View>
+        <ImageBackground source={bg} style={styles.bg} resizeMode="cover">
+            <View style={styles.overlay}>
+                <TextInput
+                    style={styles.input}
+                    placeholder="First Name"
+                    value={name}
+                    onChangeText={setName}
+                    placeholderTextColor="#A47E59"
+                />
+                <TextInput
+                    style={styles.input}
+                    placeholder="Last Name"
+                    value={surname}
+                    onChangeText={setSurname}
+                    placeholderTextColor="#A47E59"
+                />
+                <TextInput
+                    style={styles.input}
+                    placeholder="Email"
+                    autoCapitalize="none"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    placeholderTextColor="#A47E59"
+                />
+                <View style={styles.passwordContainer}>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Password"
+                        secureTextEntry={!showPassword}
+                        value={password}
+                        onChangeText={setPassword}
+                        placeholderTextColor="#A47E59"
+                    />
+                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                        <Ionicons name={showPassword ? "eye" : "eye-off"} size={24} color="#A47E59" />
+                    </TouchableOpacity>
+                </View>
+
+                {!!error && <Text style={styles.error}>{error}</Text>}
+
+                <TouchableOpacity style={styles.button} onPress={handleSignup}>
+                    <Text style={styles.buttonText}>SIGN UP</Text>
+                </TouchableOpacity>
+
+                <View style={styles.signupContainer}>
+                    <Text style={styles.linkText}>Already have an account?</Text>
+                    <Link href="/auth/login">
+                        <Text style={styles.signupLink}> Log in</Text>
+                    </Link>
+                </View>
+            </View>
+        </ImageBackground>
     );
 }

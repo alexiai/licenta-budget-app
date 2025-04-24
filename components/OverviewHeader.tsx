@@ -33,24 +33,12 @@ export default function OverviewHeader({
         fetchBudgets();
     }, []);
 
-    useEffect(() => {
-        const current = pathname.split('/').pop();
-        console.log('🔁 [Header] pathname:', pathname, '→ selectedView:', current);
-
-        if (current === 'list' || current === 'chart' || current === 'calendar') {
-            if (selectedView !== current) {
-                setSelectedView(current); // typescript știe că e valid aici
-            }
-        }
-    }, [pathname]);
-
     const handleSwitch = (view: 'list' | 'chart' | 'calendar') => {
         if (view !== selectedView) {
             setSelectedView(view);
             router.replace(`/tabs/overview/${view}`);
         }
     };
-
 
     const handleBudgetChange = (val: any) => {
         setSelectedBudget(val);
@@ -62,12 +50,9 @@ export default function OverviewHeader({
             <BudgetSelector
                 onBudgetChange={handleBudgetChange}
                 onNewBudget={() => {
-                    console.log('🧭 Navigating to onboarding from "+"...');
-                    router.push('/tabs/budget/onboarding?mode=create'); // 🔁 trebuie să fie corect path-ul
+                    router.push('/tabs/budget/onboarding?mode=create');
                 }}
             />
-
-
 
             {!hideSwitch && (
                 <View style={styles.switchRow}>
@@ -75,7 +60,7 @@ export default function OverviewHeader({
                         <TouchableOpacity
                             key={view}
                             style={[styles.switchBtn, selectedView === view && styles.switchBtnActive]}
-                            onPress={() => handleSwitch(view as any)}
+                            onPress={() => handleSwitch(view)}
                         >
                             <Text style={styles.switchText}>{view.toUpperCase()}</Text>
                         </TouchableOpacity>

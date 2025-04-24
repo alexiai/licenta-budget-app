@@ -1,24 +1,29 @@
-import { Stack } from 'expo-router';
+// app/_layout.tsx
+import { Stack, Slot } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '../lib/firebase';
-import { Redirect } from 'expo-router';
+import { auth } from '@lib/firebase';
+import { useFonts } from 'expo-font';
 
 export default function RootLayout() {
     const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [authChecked, setAuthChecked] = useState(false);
+
+    const [fontsLoaded] = useFonts({
+        Fredoka: require('../assets/fonts/Fredoka-VariableFont_wdth,wght.ttf'),
+    });
 
     useEffect(() => {
-        const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+        const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
             setUser(firebaseUser);
-            setLoading(false);
+            setAuthChecked(true);
         });
-        return unsub;
+        return unsubscribe;
     }, []);
 
-    if (loading) return null;
+    // Așteaptă fonturile și auth-ul
+    if (!fontsLoaded || !authChecked) return null;
 
-    if (!user) return <Redirect href="/auth/login" />;
-
-    return <Stack screenOptions={{ headerShown: false }} />;
+    // ✅ NU FACEM REDIRECT AICI!
+    return <Slot />; // sau <Stack /> dacă vrei stack navigation default
 }

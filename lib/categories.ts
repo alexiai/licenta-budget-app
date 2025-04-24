@@ -26,17 +26,17 @@ export default [
     },
     {
         label: 'Entertainment',
-        icon: require('@assets/icons/lifestyle.png'),
+        icon: require('@assets/icons/entertainment.png'),
         subcategories: ['Cinema', 'Games', 'Books', 'Concerts'],
     },
     {
         label: 'Savings',
-        icon: require('@assets/icons/income.png'),
+        icon: require('@assets/icons/savings.png'),
         subcategories: ['Savings', 'Vacation Savings'],
     },
     {
         label: 'Other',
-        icon: require('@assets/icons/pension.png'),
+        icon: require('@assets/icons/other.png'),
         subcategories: ['Miscellaneous'],
     },
 ];
