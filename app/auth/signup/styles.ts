@@ -81,10 +81,17 @@ export default StyleSheet.create({
         fontFamily: 'Fredoka',
     },
     signupLink: {
-        color: '#6C5CE7',
-        fontFamily: 'Fredoka',
+       // color: '#6C5CE7',
+        //fontFamily: 'Fredoka',
+        //fontWeight: 'bold',
+        //fontSize: 16,
+        marginLeft: 5,
+    },
+    signupLinkText: {
+        color: '#D5790D',
         fontWeight: 'bold',
-        fontSize: 16,
-        marginLeft: 6,
+    },
+    disabledButton: {
+        opacity: 0.7,
     },
 });

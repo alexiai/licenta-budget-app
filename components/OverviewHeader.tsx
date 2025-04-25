@@ -16,6 +16,7 @@ export default function OverviewHeader({
 }) {
     const router = useRouter();
     const pathname = usePathname();
+    const currentView = pathname.split('/').pop(); // Obține ultima parte a căii
     const [selectedView, setSelectedView] = useState<'list' | 'chart' | 'calendar'>('list');
     const [budgetPlans, setBudgetPlans] = useState([]);
     const [selectedBudget, setSelectedBudget] = useState(null);
@@ -59,12 +60,16 @@ export default function OverviewHeader({
                     {['list', 'chart', 'calendar'].map(view => (
                         <TouchableOpacity
                             key={view}
-                            style={[styles.switchBtn, selectedView === view && styles.switchBtnActive]}
-                            onPress={() => handleSwitch(view)}
+                            style={[
+                                styles.switchBtn,
+                                currentView === view && styles.switchBtnActive
+                            ]}
+                            onPress={() => router.replace(`/tabs/overview/${view}`)}
                         >
                             <Text style={styles.switchText}>{view.toUpperCase()}</Text>
                         </TouchableOpacity>
                     ))}
+
                 </View>
             )}
         </View>

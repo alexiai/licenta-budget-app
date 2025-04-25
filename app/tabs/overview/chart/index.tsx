@@ -13,8 +13,8 @@ import categories from '@lib/categories';
 export default function ChartOverview() {
     const [allExpenses, setAllExpenses] = useState<any[]>([]);
     const [insights, setInsights] = useState<any>({});
-    const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
-    const [expandedSubcategory, setExpandedSubcategory] = useState<string | null>(null);
+    const [expandedCategories, setExpandedCategories] = useState<{ [key: string]: boolean }>({});
+    const [expandedSubcategories, setExpandedSubcategories] = useState<{ [key: string]: boolean }>({});
     const [total, setTotal] = useState<number>(0);
     const [pieData, setPieData] = useState<any[]>([]);
 
@@ -67,62 +67,94 @@ export default function ChartOverview() {
     }, []);
 
     const toggleCategory = (cat: string) => {
-        setExpandedCategory(prev => (prev === cat ? null : cat));
-        setExpandedSubcategory(null);
+        setExpandedCategories(prev => {
+            const newState = { ...prev, [cat]: !prev[cat] };
+
+            // Dacă închidem categoria, închidem și toate subcategoriile ei
+            if (!newState[cat]) {
+                setExpandedSubcategories(prevSubs => {
+                    const newSubs = { ...prevSubs };
+                    Object.keys(insights[cat] || {}).forEach(sub => {
+                        newSubs[sub] = false;
+                    });
+                    return newSubs;
+                });
+            }
+
+            return newState;
+        });
     };
 
     const toggleSubcategory = (sub: string) => {
-        setExpandedSubcategory(prev => (prev === sub ? null : sub));
+        setExpandedSubcategories(prev => ({
+            ...prev,
+            [sub]: !prev[sub]
+        }));
     };
 
     return (
         <ImageBackground source={bg} resizeMode="cover" style={styles.container}>
-            <OverviewHeader />
-            <Text style={styles.title}>Burrow Insights</Text>
-            <Text style={styles.balance}>Burrow Balance: {total.toFixed(0)} 🥕</Text>
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-                <View style={{ width: 130, height: 130, marginLeft:25 }}>
-                <PieChart
-                        style={{ height: 130 }}
-                        data={pieData}
-                        valueAccessor={({ item }) => item.amount}
-                        outerRadius={'90%'}
-                        innerRadius={'40%'}
-                    />
-                </View>
-
-                <View style={styles.legendBox}>
-                    {pieData
-                        .sort((a, b) => b.amount - a.amount)
-                        .map((item, i) => {
-                            const percent = total > 0 ? ((item.amount / total) * 100).toFixed(0) : 0;
-                            return (
-                                <View key={item.label} style={styles.legendItem}>
-                                    <View style={[styles.colorDot, { backgroundColor: item.svg.fill }]} />
-                                    <Text style={styles.legendText}>{item.label}:<Text style={styles.legendPercent}> {percent}%</Text></Text>
-                                </View>
-                            );
-                        })}
+            {/* Partea fixă - titlurile */}
+            <View style={styles.topContainer}>
+                <OverviewHeader />
+                <View style={styles.headerContent}>
+                    <Text style={styles.title}>Burrow Insights</Text>
+                    <Text style={styles.balance}>Burrow Balance: {total.toFixed(0)}</Text>
                 </View>
             </View>
 
-            <ScrollView style={styles.insightsScroll} contentContainerStyle={{ paddingBottom: 120 }}>
+            {/* Partea scrollabilă - grafic + legenda + cheltuieli */}
+            <ScrollView
+                style={styles.scrollableContent}
+                contentContainerStyle={styles.scrollContainer}
+            >
+                {/* Graficul și legenda */}
+                <View style={styles.pieSection}>
+                    <View style={styles.pieWrapper}>
+                        <PieChart
+                            style={styles.pieChart}
+                            data={pieData}
+                            valueAccessor={({ item }) => item.amount}
+                            outerRadius={'90%'}
+                            innerRadius={'40%'}
+                        />
+                    </View>
+
+                    <View style={styles.legendBox}>
+                        {pieData
+                            .sort((a, b) => b.amount - a.amount)
+                            .map((item, i) => {
+                                const percent = total > 0 ? ((item.amount / total) * 100).toFixed(0) : 0;
+                                return (
+                                    <View key={item.label} style={styles.legendItem}>
+                                        <View style={[styles.colorDot, { backgroundColor: item.svg.fill }]} />
+                                        <Text style={styles.legendText}>
+                                            {item.label}:<Text style={styles.legendPercent}> {percent}%</Text>
+                                        </Text>
+                                    </View>
+                                );
+                            })}
+                    </View>
+                </View>
+
+                {/* Lista de cheltuieli */}
                 {Object.entries(insights).map(([cat, subObj]: any) => (
                     <View key={cat} style={styles.detailsBox}>
                         <Text onPress={() => toggleCategory(cat)} style={styles.insightTitle}>
-                            {expandedCategory === cat ? '▼' : '▶'} {cat}
+                            {expandedCategories[cat] ? '▼' : '▶'} {cat}
                         </Text>
-                        {expandedCategory === cat &&
+                        {expandedCategories[cat] &&
                             Object.entries(subObj).map(([sub, list]: any) => (
                                 <View key={sub} style={styles.subcategoryBox}>
                                     <Text onPress={() => toggleSubcategory(sub)} style={styles.subcategoryText}>
-                                        {expandedSubcategory === sub ? '▾' : '▸'} {sub}
+                                        {expandedSubcategories[sub] ? '▾' : '▸'} {sub}
                                     </Text>
-                                    {expandedSubcategory === sub &&
+                                    {expandedSubcategories[sub] &&
                                         list.map((exp: any, index: number) => (
                                             <View key={index} style={styles.expenseBox}>
-                                                <Text style={styles.expenseDate}>{new Date(exp.date).toLocaleDateString()}</Text>
+                                                <Text style={styles.expenseDate}>
+                                                    {new Date(exp.date).toLocaleDateString()}
+                                                </Text>
                                                 <View style={styles.expenseDetail}>
                                                     <Text style={styles.expenseNote}>{exp.note || 'No note'}</Text>
                                                     <View style={styles.amountBlock}>

@@ -1,4 +1,4 @@
-import { View, Text, TextInput, TouchableOpacity, ImageBackground } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ImageBackground, Alert } from 'react-native';
 import { useState } from 'react';
 import { useRouter, Link } from 'expo-router';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
@@ -16,6 +16,7 @@ export default function SignupScreen() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     const validatePassword = (pass: string) => /^(?=.*[0-9])(?=.*[!@#$%^&*])[A-Za-z0-9!@#$%^&*]{8,}$/.test(pass);
@@ -24,19 +25,37 @@ export default function SignupScreen() {
         setError('');
         if (!name || !surname || !email || !password) return setError('All fields are required.');
         if (!validateEmail(email)) return setError('Invalid email.');
-        if (!validatePassword(password)) return setError('Password too weak.');
+        if (!validatePassword(password)) return setError('Password must be at least 8 characters with 1 number and 1 special character.');
 
+        setLoading(true);
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+            // Create user document with additional fields
             await setDoc(doc(db, 'users', userCredential.user.uid), {
                 name,
                 surname,
                 email,
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                notificationsEnabled: true,  // Default settings
+                appNotificationsEnabled: true
             });
+
+            Alert.alert('Success', 'Account created successfully!');
             router.replace('/auth/login');
         } catch (err: any) {
-            setError('Signup failed. Try again.');
+            console.error('Signup error:', err);
+            let errorMessage = 'Signup failed. Try again.';
+
+            if (err.code === 'auth/email-already-in-use') {
+                errorMessage = 'Email already in use.';
+            } else if (err.code === 'auth/weak-password') {
+                errorMessage = 'Password should be at least 6 characters.';
+            }
+
+            setError(errorMessage);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -49,6 +68,7 @@ export default function SignupScreen() {
                     value={name}
                     onChangeText={setName}
                     placeholderTextColor="#A47E59"
+                    autoCapitalize="words"
                 />
                 <TextInput
                     style={styles.input}
@@ -56,6 +76,7 @@ export default function SignupScreen() {
                     value={surname}
                     onChangeText={setSurname}
                     placeholderTextColor="#A47E59"
+                    autoCapitalize="words"
                 />
                 <TextInput
                     style={styles.input}
@@ -75,21 +96,34 @@ export default function SignupScreen() {
                         onChangeText={setPassword}
                         placeholderTextColor="#A47E59"
                     />
-                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-                        <Ionicons name={showPassword ? "eye" : "eye-off"} size={24} color="#A47E59" />
+                    <TouchableOpacity
+                        onPress={() => setShowPassword(!showPassword)}
+                        style={styles.eyeIcon}
+                    >
+                        <Ionicons
+                            name={showPassword ? "eye" : "eye-off"}
+                            size={24}
+                            color="#A47E59"
+                        />
                     </TouchableOpacity>
                 </View>
 
                 {!!error && <Text style={styles.error}>{error}</Text>}
 
-                <TouchableOpacity style={styles.button} onPress={handleSignup}>
-                    <Text style={styles.buttonText}>SIGN UP</Text>
+                <TouchableOpacity
+                    style={[styles.button, loading && styles.disabledButton]}
+                    onPress={handleSignup}
+                    disabled={loading}
+                >
+                    <Text style={styles.buttonText}>
+                        {loading ? 'Creating Account...' : 'SIGN UP'}
+                    </Text>
                 </TouchableOpacity>
 
                 <View style={styles.signupContainer}>
                     <Text style={styles.linkText}>Already have an account?</Text>
-                    <Link href="/auth/login">
-                        <Text style={styles.signupLink}> Log in</Text>
+                    <Link href="/auth/login" style={styles.signupLink}>
+                        <Text style={styles.signupLinkText}> Log in</Text>
                     </Link>
                 </View>
             </View>

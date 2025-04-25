@@ -5,23 +5,22 @@ export default StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#FFE8B0',
-        padding: 20,
     },
     title: {
-        fontSize: 34,
+        fontSize: 37,
         fontWeight: '900',
         fontFamily: 'Fredoka',
         color: '#91483c',
         textAlign: 'center',
-        marginBottom: 4,
+        marginBottom: 6,
     },
     balance: {
-        fontSize: 22,
+        fontSize: 25,
         fontWeight: '600',
         fontFamily: 'Fredoka',
         color: '#cf6b04',
         textAlign: 'center',
-        marginBottom: 10,
+        marginBottom: 20,
         letterSpacing: -0.7,
     },
     legendBox: {
@@ -52,11 +51,41 @@ export default StyleSheet.create({
         fontWeight: '600',
         color: '#3D405B',
     },
-    insightsScroll: {
-        flex: 1,
+    topContainer: {
+        paddingHorizontal: 20,
+        paddingTop: 20,
+    },
+
+    headerContent: {
+        paddingBottom: 10,
+    },
+    pieChart: {
+        height: '100%',
+        marginLeft:4
+    },
+
+    pieWrapper: {
+        width: 130,
+        height: 130,
+        marginLeft:15
+    },
+
+    pieSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 20,
     },
 
     ////////////////insights///////////////////
+    scrollableContent: {
+        flex: 1,
+    },
+    scrollContainer: {
+        padding: 20,
+        paddingTop: 10,
+        paddingBottom: 120,
+    },
+
     detailsBox: {
         backgroundColor: '#ffe599',
         borderRadius: 18,
