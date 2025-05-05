@@ -5,7 +5,7 @@ import { auth, db } from '@lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import styles from '@styles/overviewCalendar';
 import OverviewHeader from '@components/OverviewHeader';
-import bg from '@assets/bg/background2.png';
+import bg from '@assets/bg/background3.png';
 import iconGood from '@assets/icons/calendarGood.png';
 import iconMedium from '@assets/icons/calendarMedium.png';
 import iconBad from '@assets/icons/calendarBad.png';

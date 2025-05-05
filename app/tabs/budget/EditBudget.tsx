@@ -1,17 +1,20 @@
-// Replace the entire EditBudget component with this updated version
+// EditBudget.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Image } from 'react-native';
+import {
+    View, Text, TextInput, TouchableOpacity, Image, ScrollView,
+} from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { FlashList } from '@shopify/flash-list';
-import { PanGestureHandler, GestureHandlerRootView } from 'react-native-gesture-handler';
-import styles from '@styles/editBudget';
-import { collection, doc, updateDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { doc, updateDoc } from 'firebase/firestore';
+import DraggableFlatList from 'react-native-draggable-flatlist';
 import { db } from '@lib/firebase';
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import categoriesLib from '@lib/categories';
 import incomeIcon from '@assets/icons/income.png';
-import categories from "@lib/categories";
+import { PieChart } from 'react-native-svg-charts';
+import styles from '@styles/editBudget';
+import budgetStyles from '@styles/budget';
 
-const predefinedCategories: Record<string, string[]> = {
+const predefinedCategories = {
     housing: ['Rent', 'Electricity', 'Water', 'Internet', 'TV', 'Insurance', 'Home Supplies'],
     food: ['Groceries', 'Restaurant', 'Coffee', 'Drinks'],
     transport: ['Gas', 'Taxi', 'Parking', 'Public Transport', 'Car Insurance', 'Car Loan', 'Flight', 'Repair'],
@@ -22,7 +25,9 @@ const predefinedCategories: Record<string, string[]> = {
     other: ['Miscellaneous'],
 };
 
-const categoryNameToKey: Record<string, string> = {
+const predefinedIncomeTypes = ['Salary', 'Pension', 'Freelancing', 'Investments', 'Scholarship', 'Other'];
+
+const categoryNameToKey = {
     Housing: 'housing',
     'Food & Drinks': 'food',
     Transport: 'transport',
@@ -33,309 +38,273 @@ const categoryNameToKey: Record<string, string> = {
     Other: 'other',
 };
 
-type EditBudgetProps = {
-    categories: any[];
-    incomes: any[];
-    onChange: (newCategories: any[], newIncomes: any[]) => void;
-    budgetId: string;
-};
-
-export default function EditBudget({
-                                       categories: initialCategories,
-                                       incomes: initialIncomes,
-                                       onChange
-                                   }: Omit<EditBudgetProps, 'budgetId'>) {
+export default function EditBudget({ categories: initialCategories, incomes: initialIncomes, onChange }) {
     const [categories, setCategories] = useState(initialCategories);
     const [incomes, setIncomes] = useState(initialIncomes);
-    const [budgetId, setBudgetId] = useState<string | null>(null);
-    const [openIndex, setOpenIndex] = useState<number | null>(null);
-    const [selectedSub, setSelectedSub] = useState<string | null>(null);
-    const [manualSub, setManualSub] = useState('');
-    const [dropdownOpen, setDropdownOpen] = useState(false);
-    const [editingIncomeIndex, setEditingIncomeIndex] = useState<number | null>(null);
-    const [newIncomeType, setNewIncomeType] = useState('salary');
-    const [newIncomeAmount, setNewIncomeAmount] = useState('');
+    const [budgetId, setBudgetId] = useState(null);
+    const [openDropdown, setOpenDropdown] = useState(null);
+    const [showChart, setShowChart] = useState(false);
 
     useEffect(() => {
-        const loadBudgetId = async () => {
-            const stored = await AsyncStorage.getItem('selectedBudget');
-            if (stored) setBudgetId(stored);
-        };
-        loadBudgetId();
+        AsyncStorage.getItem('selectedBudget').then(setBudgetId);
     }, []);
 
-    const updateAll = async (newCategories: any[], newIncomes: any[]) => {
-        setCategories(newCategories);
-        setIncomes(newIncomes);
-        onChange(newCategories, newIncomes);
-
-        if (!budgetId) {
-            console.error('🔥 updateFirestore called without valid budgetId');
-            return;
-        }
-
-        try {
-            const ref = doc(db, 'budgets', budgetId);
-            await updateDoc(ref as any, {
-                categories: newCategories,
-                incomes: newIncomes
-            });
-        } catch (e) {
-            console.error('Failed to update budget:', e);
-        }
+    const updateAll = async (newCats, newIncs) => {
+        setCategories(newCats);
+        setIncomes(newIncs);
+        onChange(newCats, newIncs);
+        if (!budgetId) return;
+        await updateDoc(doc(db, 'budgets', budgetId), {
+            categories: newCats,
+            incomes: newIncs,
+        });
     };
 
-    const handleDelete = async (catIndex: number, subIndex: number) => {
-        const updated = categories.map((cat, i2) => {
-            if (i2 !== catIndex) return cat;
-            return {
-                ...cat,
-                subcategories: cat.subcategories.filter((_, j) => j !== subIndex),
-            };
-        });
+    const handleAmountChange = async (catIdx, subIdx, val) => {
+        const updated = [...categories];
+        updated[catIdx].subcategories[subIdx].amount = val;
         await updateAll(updated, incomes);
     };
 
-    const handleAmountChange = async (catIndex: number, subIndex: number, value: string) => {
-        const updated = categories.map((cat, i2) => {
-            if (i2 !== catIndex) return cat;
-            return {
-                ...cat,
-                subcategories: cat.subcategories.map((sub: any, j) =>
-                    j === subIndex ? { ...sub, amount: value } : sub
-                ),
-            };
-        });
-        await updateAll(updated, incomes);
-    };
-
-    const handleAddSub = (catIndex: number) => {
-        setOpenIndex(catIndex);
-        setSelectedSub(null);
-        setManualSub('');
-        setDropdownOpen(true);
-    };
-
-    const confirmAddSub = async () => {
-        if (openIndex === null || !budgetId) {
-            console.error('⚠️ budgetId or openIndex is undefined in confirmAddSub');
-            return;
-        }
-
-        const subName = selectedSub === 'Other' ? manualSub.trim() : selectedSub;
-        if (!subName) return;
-
-        const updated = categories.map((cat, i2) => {
-            if (i2 !== openIndex) return cat;
-            return {
-                ...cat,
-                subcategories: [...cat.subcategories, { name: subName, amount: '0' }],
-            };
-        });
-
-        await updateAll(updated, incomes);
-
-        setDropdownOpen(false);
-        setOpenIndex(null);
-        setSelectedSub(null);
-        setManualSub('');
-    };
-
-    const handleIncomeAmountChange = (index: number, newAmount: string) => {
+    const handleIncomeChange = async (idx, val) => {
         const updated = [...incomes];
-        updated[index].amount = newAmount;
-        setIncomes(updated);
-    };
-
-    const saveIncomeChanges = async () => {
-        await updateAll(categories, incomes);
-        setEditingIncomeIndex(null);
-    };
-
-    const addNewIncome = async () => {
-        if (!newIncomeAmount) return;
-
-        const updatedIncomes = [
-            ...incomes,
-            { type: newIncomeType, amount: newIncomeAmount }
-        ];
-
-        await updateAll(categories, updatedIncomes);
-        setNewIncomeType('salary');
-        setNewIncomeAmount('');
-    };
-
-    const deleteIncome = async (index: number) => {
-        const updated = incomes.filter((_, i) => i !== index);
+        updated[idx].amount = val;
         await updateAll(categories, updated);
     };
 
+    const deleteSub = async (catIdx, subIdx) => {
+        const updated = [...categories];
+        updated[catIdx].subcategories.splice(subIdx, 1);
+        await updateAll(updated, incomes);
+    };
+
+    const deleteIncome = async (idx) => {
+        const updated = incomes.filter((_, i) => i !== idx);
+        await updateAll(categories, updated);
+    };
+
+    const handleAddSub = async (catIdx, name) => {
+        const updated = [...categories];
+        if (name === 'Other') {
+            updated[catIdx].subcategories.push({ name: '', amount: '0', isOther: true });
+        } else {
+            updated[catIdx].subcategories.push({ name, amount: '0', isOther: false });
+        }
+        await updateAll(updated, incomes);
+    };
+
+
+    const handleAddIncome = async (type) => {
+        if (type === 'Other') {
+            const updated = [...incomes, { type: '', amount: '0', isOther: true }];
+            await updateAll(categories, updated);
+        } else {
+            const updated = [...incomes, { type, amount: '0', isOther: false }];
+            await updateAll(categories, updated);
+        }
+    };
+
+    const getCategoryIcon = (subName, parentCategoryName = null) => {
+        const found = categoriesLib.find((cat) => cat.subcategories.includes(subName));
+        if (found) return found.icon;
+
+        if (parentCategoryName) {
+            const key = categoryNameToKey[parentCategoryName] || 'other';
+            const fallback = categoriesLib.find((cat) => categoryNameToKey[cat.name] === key);
+            if (fallback) return fallback.icon;
+        }
+        return require('@assets/icons/other.png');
+    };
+
+    const getChartData = () => {
+        const baseColors = ['#f94144', '#f3722c', '#f9c74f', '#90be6d', '#43aa8b', '#577590', '#6A4C93', '#e5989b'];
+        return categories.map((cat, index) => {
+            const total = cat.subcategories?.reduce((sum, sub) => sum + parseFloat(sub.amount || '0'), 0);
+            return { value: total, svg: { fill: baseColors[index % baseColors.length] }, key: `pie-${cat.name}-${index}` };
+        }).filter(entry => entry.value > 0);
+    };
+
+    const totalIncome = incomes.reduce((sum, i) => sum + parseFloat(i.amount || '0'), 0);
+    const totalPlanned = categories.reduce((sum, cat) =>
+        sum + (cat.subcategories ?? []).reduce((s, sub) => s + parseFloat(sub.amount || '0'), 0), 0);
+    const remaining = isNaN(totalIncome - totalPlanned) ? 0 : totalIncome - totalPlanned;
+
     return (
-        <ScrollView>
-            {/* Income Section - Updated to match category styling */}
-            <Text style={styles.section}>Income</Text>
-            {incomes.map((income, index) => (
-                <View key={`income-${index}`} style={styles.itemRow}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 80 }}>
+            <View style={budgetStyles.card}>
+                <Text style={budgetStyles.cardTitle}>Budget</Text>
+                <Text style={budgetStyles.cardValue}>${totalIncome}</Text>
+                <View style={budgetStyles.progressBarContainer}>
+                    <View style={[budgetStyles.progressBar, { width: `${(totalPlanned / totalIncome) * 100}%` }]} />
+                </View>
+                <View style={budgetStyles.cardRow}>
+                    <Text style={budgetStyles.cardSubtitle}>Spent</Text>
+                    <Text style={budgetStyles.cardSubtitle}>${totalPlanned}</Text>
+                </View>
+                <View style={budgetStyles.cardRow}>
+                    <Text style={budgetStyles.cardSubtitle}>Remaining</Text>
+                    <Text style={budgetStyles.cardSubtitle}>${remaining}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowChart(prev => !prev)}>
+                    <Text style={budgetStyles.chartToggle}>Tap to show chart</Text>
+                </TouchableOpacity>
+                {showChart && (
+                    <View style={budgetStyles.chartRow}>
+                        <View style={budgetStyles.pieWrapper}>
+                            <PieChart
+                                style={budgetStyles.pieChart}
+                                data={getChartData()}
+                                valueAccessor={({ item }) => item.value}
+                                outerRadius={'85%'}
+                                innerRadius={'40%'}
+                            />
+                        </View>
+                    </View>
+                )}
+            </View>
+
+            <Text style={budgetStyles.section}>Income</Text>
+            {incomes.map((inc, i) => (
+                <View key={`income-${i}`} style={styles.itemRow}>
+                    <Feather name="menu" size={20} color="#91483c" style={styles.dragIcon} />
                     <Image source={incomeIcon} style={styles.categoryIcon} />
-                    {editingIncomeIndex === index ? (
-                        <>
-                            <TextInput
-                                value={income.type}
-                                onChangeText={(text) => {
-                                    const updated = [...incomes];
-                                    updated[index].type = text;
-                                    setIncomes(updated);
-                                }}
-                                style={[styles.itemText, { flex: 1 }]}
-                            />
-                            <TextInput
-                                value={income.amount}
-                                onChangeText={(text) => handleIncomeAmountChange(index, text)}
-                                style={[styles.itemText, { width: 80 }]}
-                                keyboardType="numeric"
-                            />
-                            <TouchableOpacity onPress={saveIncomeChanges}>
-                                <Feather name="check" size={20} color="#2ecc71" />
-                            </TouchableOpacity>
-                        </>
+                    {inc.isOther ? (
+                        <TextInput
+                            placeholder="Other"
+                            value={inc.type}
+                            onChangeText={(val) => {
+                                const updated = [...incomes];
+                                updated[i].type = val;
+                                updateAll(categories, updated);
+                            }}
+                            style={[styles.itemText, { fontStyle: 'italic', opacity: 0.8 }]}
+                        />
                     ) : (
-                        <>
-                            <Text style={[styles.itemText, { flex: 1 }]}>{income.type}</Text>
-                            <Text style={[styles.itemText, { width: 80 }]}>{income.amount} RON</Text>
-                            <TouchableOpacity onPress={() => setEditingIncomeIndex(index)}>
-                                <Feather name="edit" size={20} color="#3498db" />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => deleteIncome(index)}>
-                                <Feather name="trash-2" size={20} color="#e74c3c" />
-                            </TouchableOpacity>
-                        </>
+                        <Text style={styles.itemText}>{inc.type}</Text>
                     )}
+                    <TextInput
+                        value={inc.amount}
+                        onChangeText={(val) => handleIncomeChange(i, val)}
+                        style={styles.itemAmount}
+                        keyboardType="numeric"
+                    />
+                    <TouchableOpacity onPress={() => deleteIncome(i)}>
+                        <Feather name="minus-circle" size={20} color="#91483c" />
+                    </TouchableOpacity>
                 </View>
             ))}
 
-            {/* Add New Income - Updated to match add subcategory styling */}
-            <View style={styles.addSubBtn}>
-                <TextInput
-                    placeholder="Income type"
-                    value={newIncomeType}
-                    onChangeText={setNewIncomeType}
-                    style={[styles.input, { flex: 1, marginRight: 8 }]}
-                />
-                <TextInput
-                    placeholder="Amount"
-                    value={newIncomeAmount}
-                    onChangeText={setNewIncomeAmount}
-                    style={[styles.input, { width: 100 }]}
-                    keyboardType="numeric"
-                />
-                <TouchableOpacity
-                    onPress={addNewIncome}
-                    style={styles.addButton}
-                    disabled={!newIncomeAmount}
-                >
-                    <Text style={styles.addButtonText}>+ Add Income</Text>
-                </TouchableOpacity>
-            </View>
 
-            {/* Categories Section (unchanged) */}
+            <TouchableOpacity
+                onPress={() => setOpenDropdown(openDropdown === 'income' ? null : 'income')}
+                style={styles.addSubBtn}
+            >
+                <Text style={styles.addSubText}>+ Add Income Type</Text>
+            </TouchableOpacity>
+
+            {openDropdown === 'income' && (
+                <View style={styles.subGrid}>
+                    {predefinedIncomeTypes
+                        .filter(type => !incomes.some(inc => inc.type.startsWith(type)))
+                        .map((type, idx) => (
+                            <TouchableOpacity
+                                key={idx}
+                                onPress={() => handleAddIncome(type)}
+                                style={styles.subPill}
+                            >
+                                <Text style={styles.subPillText}>{type}</Text>
+                            </TouchableOpacity>
+                        ))}
+                </View>
+            )}
+
             {categories.map((cat, i) => {
                 const key = categoryNameToKey[cat.name] || 'other';
-                const allSubs = predefinedCategories[key] || [];
-                const usedSubs = cat.subcategories.map((sub: any) => sub.name);
-                const availableSubs = allSubs.filter(sub => !usedSubs.includes(sub));
+                const used = cat.subcategories.map((s) => s.name);
+                const available = (predefinedCategories[key] || []).filter((s) => !used.includes(s));
+                const dataWithIndex = cat.subcategories.map((s, j) => ({ ...s, index: j }));
 
                 return (
-                    <View key={i}>
-                        <View style={styles.categoryHeader}>
-                            <Image source={getCategoryIcon(cat.name)} style={styles.categoryIcon} />
-                            <Text style={styles.section}>{cat.name}</Text>
-                        </View>
-
-                        <FlashList
-                            data={cat.subcategories}
-                            estimatedItemSize={50}
-                            keyExtractor={(_, index) => `sub-${i}-${index}`}
-                            renderItem={({ item, index }) => {
-                                if (!item || typeof item.name !== 'string') return null;
-
-                                return (
-                                    <GestureHandlerRootView>
-                                        <TouchableOpacity style={styles.itemRow}>
-                                            <Feather
-                                                name="minus-circle"
-                                                size={20}
-                                                color="#e74c3c"
-                                                onPress={() => handleDelete(i, index)}
-                                            />
-                                            <Text style={[styles.itemText, { flex: 1, marginLeft: 8 }]}>{item.name}</Text>
-                                            <TextInput
-                                                style={[styles.itemText, { width: 60, textAlign: 'right' }]}
-                                                value={String(item.amount)}
-                                                onChangeText={(text) => handleAmountChange(i, index, text)}
-                                                keyboardType="numeric"
-                                            />
-                                        </TouchableOpacity>
-                                    </GestureHandlerRootView>
-                                );
+                    <View key={`cat-${i}`}>
+                        <Text style={budgetStyles.section}>{cat.name}</Text>
+                        <DraggableFlatList
+                            data={dataWithIndex}
+                            keyExtractor={(item, index) => `sub-${i}-${index}`}
+                            renderItem={({ item, drag, isActive }) => (
+                                <TouchableOpacity
+                                    style={[styles.itemRow, isActive && { opacity: 0.9 }]}
+                                    onLongPress={drag}
+                                >
+                                    <Feather name="menu" size={20} color="#91483c" style={styles.dragIcon} />
+                                    <Image
+                                        source={getCategoryIcon(item.name, cat.name)}
+                                        style={styles.categoryIcon}
+                                    />
+                                    {item.isOther ? (
+                                        <TextInput
+                                            placeholder="Other"
+                                            value={item.name}
+                                            onChangeText={(val) => {
+                                                const updated = [...categories];
+                                                updated[i].subcategories[item.index].name = val;
+                                                updateAll(updated, incomes);
+                                            }}
+                                            style={[styles.itemText, { fontStyle: 'italic', opacity: 0.8 }]}
+                                        />
+                                    ) : (
+                                        <Text style={styles.itemText}>{item.name}</Text>
+                                    )}
+                                    <TextInput
+                                        value={item.amount}
+                                        onChangeText={(val) => handleAmountChange(i, item.index, val)}
+                                        style={styles.itemAmount}
+                                        keyboardType="numeric"
+                                    />
+                                    <TouchableOpacity onPress={() => deleteSub(i, item.index)}>
+                                        <Feather name="minus-circle" size={20} color="#91483c" />
+                                    </TouchableOpacity>
+                                </TouchableOpacity>
+                            )}
+                            onDragEnd={({ data }) => {
+                                const updated = [...categories];
+                                updated[i].subcategories = data.map(({ name, amount, isOther }) => ({ name, amount, isOther }));
+                                updateAll(updated, incomes);
                             }}
                         />
 
-                        <TouchableOpacity style={styles.addSubBtn} onPress={() => handleAddSub(i)}>
-                            <Text style={styles.addSubText}>+ Add new subcategory</Text>
+                        <TouchableOpacity
+                            onPress={() => setOpenDropdown(openDropdown === i ? null : i)}
+                            style={styles.addSubBtn}
+                        >
+                            <Text style={styles.addSubText}>+ Add Subcategory</Text>
                         </TouchableOpacity>
 
-                        {dropdownOpen && openIndex === i && (
-                            <View style={styles.dropdownContainer}>
-                                <Text style={styles.selectLabel}>Select subcategory</Text>
-
-                                <View style={styles.subGrid}>
-                                    {availableSubs.length > 0 ? (
-                                        <>
-                                            {availableSubs.map((sub, idx) => (
-                                                <TouchableOpacity
-                                                    key={idx}
-                                                    style={[styles.subPill, selectedSub === sub && styles.subPillActive]}
-                                                    onPress={() => setSelectedSub(sub)}
-                                                >
-                                                    <Text style={styles.subPillText}>{sub}</Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                            <TouchableOpacity
-                                                style={[styles.subPill, selectedSub === 'Other' && styles.subPillActive]}
-                                                onPress={() => setSelectedSub('Other')}
-                                            >
-                                                <Text style={styles.subPillText}>Other</Text>
-                                            </TouchableOpacity>
-                                        </>
-                                    ) : (
-                                        <Text style={styles.disabledText}>Every subcategory is used</Text>
-                                    )}
-                                </View>
-
-                                {selectedSub === 'Other' && (
-                                    <TextInput
-                                        placeholder="Enter subcategory name"
-                                        placeholderTextColor="#999"
-                                        value={manualSub}
-                                        onChangeText={setManualSub}
-                                        style={styles.inputTransparent}
-                                    />
-                                )}
-
-                                <TouchableOpacity onPress={confirmAddSub} style={styles.button}>
-                                    <Text style={styles.buttonText}>Add</Text>
+                        {openDropdown === i && (
+                            <View style={styles.subGrid}>
+                                {available.length > 0 && available.map((name, idx) => (
+                                    <TouchableOpacity
+                                        key={idx}
+                                        onPress={() => handleAddSub(i, name)}
+                                        style={styles.subPill}
+                                    >
+                                        <Text style={styles.subPillText}>{name}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                                <TouchableOpacity
+                                    onPress={() => handleAddSub(i, 'Other')}
+                                    style={[styles.subPill, { borderStyle: 'dashed', opacity: 0.8 }]}
+                                >
+                                    <Text style={styles.subPillText}>Other</Text>
                                 </TouchableOpacity>
+                                {available.length === 0 && (
+                                    <Text style={styles.disabledText}>Every subcategory is used</Text>
+                                )}
                             </View>
                         )}
                     </View>
                 );
             })}
+
         </ScrollView>
     );
-}
-
-// Helper function to get category icon (add this at the bottom of the file)
-function getCategoryIcon(categoryName: string) {
-    const category = categories.find(cat => cat.name === categoryName);
-    return category ? category.icon : require('@assets/icons/income.png');
 }

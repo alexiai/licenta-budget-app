@@ -7,6 +7,8 @@ import { useRouter } from 'expo-router';
 import styles from '@styles/profile';
 import bg from '@assets/bg/background2.png';
 import calendarGood from '@assets/icons/calendarGood.png';
+import { httpsCallable } from "firebase/functions";
+import { functions } from "@lib/firebase";
 
 
 export default function MyProfileScreen() {
@@ -52,6 +54,26 @@ export default function MyProfileScreen() {
         };
         loadUser();
     }, [user]);
+
+
+    const handleConnectBank = async () => {
+        console.log("🔄 Connecting to bank...");
+        try {
+            const connectToBank = httpsCallable(functions, "connectToBank");
+            const res: any = await connectToBank();
+            console.log("✅ Bank function response:", res);
+            const url = res.data.url;
+            if (url) {
+                console.log("🌐 Opening Salt Edge URL:", url);
+                window.open(url, "_blank");
+            } else {
+                console.warn("⚠️ No URL received from connectToBank");
+            }
+        } catch (err: any) {
+            console.error("❌ Bank error", err);
+            Alert.alert("Error", err.message || "Could not connect to bank.");
+        }
+    };
 
 
     const handleSave = async () => {
@@ -267,6 +289,12 @@ export default function MyProfileScreen() {
                         onPress={() => router.push('/support')}
                     >
                         <Text style={styles.itemBtnText}>Support</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.itemBtn}
+                        onPress={handleConnectBank}
+                    >
+                        <Text style={styles.itemBtnText}>Connect to Bank</Text>
                     </TouchableOpacity>
 
                     {!showDeleteConfirmation ? (

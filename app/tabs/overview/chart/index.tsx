@@ -6,7 +6,7 @@ import { auth, db } from '@lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import styles from '@styles/overviewChart';
 import OverviewHeader from '@components/OverviewHeader';
-import bg from '@assets/bg/background2.png';
+import bg from '@assets/bg/background3.png';
 import carrotIcon from '@assets/icons/carrotcoinlist.png';
 import categories from '@lib/categories';
 

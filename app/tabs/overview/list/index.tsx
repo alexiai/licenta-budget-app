@@ -5,7 +5,7 @@ import { db, auth } from '@lib/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import OverviewHeader from '@components/OverviewHeader';
-import bg from '@assets/bg/background2.png';
+import bg from '@assets/bg/background3.png';
 import bunnyIcon from '@assets/icons/bunnyhead.png';
 import categories from '@lib/categories';
 import styles from '@styles/overviewList';
