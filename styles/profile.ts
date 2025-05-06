@@ -276,5 +276,20 @@ export default StyleSheet.create({
         backgroundColor: '#ffe8b0',
         borderRadius: 8,
     },
+    // Adaugă la stilurile existente
+    bankConnectBtn: {
+        backgroundColor: '#4CAF50',
+        padding: 15,
+        borderRadius: 10,
+        marginVertical: 15,
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#388E3C',
+    },
+    bankConnectBtnText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
 
 });

@@ -3,6 +3,7 @@ import styles from '@styles/summaryStep';
 import { auth, db } from '@lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
+
 export default function SummaryStep({ onFinish, data }) {
     // 🧮 Totalul venitului
     const totalIncome = data.incomes?.reduce((sum, i) => sum + parseFloat(i.amount || '0'), 0) || 0;

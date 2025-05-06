@@ -61,6 +61,16 @@ export default function TabsLayout() {
                     href: null,
                 }}
             />
+            <Tabs.Screen
+                name="budget/bank-transactions"
+                options={{
+                    // Opțional, poți face această rută accesibilă direct din bara de tab-uri
+                    // sau o poți ascunde (href: null) și accesa doar din interfața aplicației
+                    href: null, // Ascunde din tab bar
+                }}
+            />
         </Tabs>
+
     );
+
 }

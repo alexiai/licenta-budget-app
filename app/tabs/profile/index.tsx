@@ -290,12 +290,6 @@ export default function MyProfileScreen() {
                     >
                         <Text style={styles.itemBtnText}>Support</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.itemBtn}
-                        onPress={handleConnectBank}
-                    >
-                        <Text style={styles.itemBtnText}>Connect to Bank</Text>
-                    </TouchableOpacity>
 
                     {!showDeleteConfirmation ? (
                         <TouchableOpacity
@@ -326,6 +320,12 @@ export default function MyProfileScreen() {
 
                     <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                         <Text style={styles.logoutText}>Log Out</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.itemBtn, styles.bankBtn]}
+                        onPress={() => router.push('/bank-connect')}
+                    >
+                        <Text style={styles.itemBtnText}>Connect Bank Account</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>

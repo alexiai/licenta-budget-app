@@ -14,6 +14,7 @@ import { PieChart } from 'react-native-svg-charts';
 import styles from '@styles/editBudget';
 import budgetStyles from '@styles/budget';
 
+
 const predefinedCategories = {
     housing: ['Rent', 'Electricity', 'Water', 'Internet', 'TV', 'Insurance', 'Home Supplies'],
     food: ['Groceries', 'Restaurant', 'Coffee', 'Drinks'],

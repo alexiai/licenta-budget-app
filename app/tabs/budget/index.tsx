@@ -20,6 +20,7 @@ import { PieChart } from 'react-native-svg-charts';
 import EditBudget from './EditBudget';
 import bg from '@assets/bg/budgetbackground.png';
 import categories from '@lib/categories';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function BudgetScreen() {
     const router = useRouter();
