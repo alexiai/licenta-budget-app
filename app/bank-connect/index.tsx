@@ -3,12 +3,14 @@ import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { auth, db } from '../../lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, getDocs, query, where } from 'firebase/firestore';
+import { httpsCallable, getFunctions } from 'firebase/functions';
 import styles from '@styles/bank';
 
 export default function BankConnect() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
+    const functions = getFunctions();
 
     const handleConnect = async () => {
         setLoading(true);
@@ -18,26 +20,44 @@ export default function BankConnect() {
                 return;
             }
 
-            // Aici vom implementa logica pentru BT
-            Alert.alert(
-                'Bank Connection',
-                'To connect your BT account, you will need to:\n\n1. Log into your BT account\n2. Go to Settings\n3. Enable API access\n4. Generate an API key\n\nThis feature will be available soon.',
-                [
-                    {
-                        text: 'OK',
-                        onPress: () => router.back()
-                    }
-                ]
-            );
+            // Inițiem procesul de conectare la BT
+            const initBTConnection = httpsCallable(functions, 'initBTConnection');
+            const response = await initBTConnection();
 
-            await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-                bankConnected: true,
-                bankName: 'Banca Transilvania',
-                lastSync: new Date().toISOString()
-            });
+            if (response.data?.authUrl) {
+                // Deschidem pagina de autentificare BT într-o fereastră nouă
+                window.open(response.data.authUrl, '_blank');
 
-        } catch (error) {
-            Alert.alert('Error', 'Could not connect to bank. Please try again later.');
+                // Creăm o cerere de conectare în Firestore
+                const connectionRequest = await addDoc(collection(db, 'bankConnections'), {
+                    userId: auth.currentUser.uid,
+                    status: 'pending',
+                    bankName: 'Banca Transilvania',
+                    createdAt: new Date().toISOString()
+                });
+
+                // Actualizăm statusul utilizatorului
+                await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+                    bankConnected: true,
+                    bankName: 'Banca Transilvania',
+                    lastSync: new Date().toISOString(),
+                    connectionId: connectionRequest.id
+                });
+
+                Alert.alert(
+                    'Conectare Bancă',
+                    'Te rugăm să completezi autentificarea în pagina BT care s-a deschis. După autentificare, tranzacțiile tale vor fi importate automat.',
+                    [
+                        {
+                            text: 'OK',
+                            onPress: () => router.replace('/tabs/overview/list')
+                        }
+                    ]
+                );
+            }
+
+        } catch (error: any) {
+            Alert.alert('Eroare', error.message || 'Nu s-a putut realiza conexiunea cu banca. Te rugăm încearcă din nou.');
         } finally {
             setLoading(false);
         }
@@ -45,9 +65,9 @@ export default function BankConnect() {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>Connect your Bank Account</Text>
+            <Text style={styles.title}>Conectează-ți Contul Bancar</Text>
             <Text style={styles.description}>
-                Connect your Banca Transilvania account to automatically import and categorize your transactions.
+                Conectează-ți contul BT pentru a importa și categoriza automat tranzacțiile tale.
             </Text>
             <TouchableOpacity
                 style={[styles.connectBtn, loading && styles.connectBtnDisabled]}
@@ -55,7 +75,7 @@ export default function BankConnect() {
                 disabled={loading}
             >
                 <Text style={styles.connectBtnText}>
-                    {loading ? 'Connecting...' : 'Connect to BT'}
+                    {loading ? 'Se conectează...' : 'Conectare la BT'}
                 </Text>
             </TouchableOpacity>
         </View>

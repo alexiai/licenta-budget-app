@@ -65,11 +65,21 @@ export default StyleSheet.create({
     },
     subcategory: {
         fontFamily: 'Fredoka',
-        fontWeight: 'bold',
-        color: '#52366b',
-        fontSize: 27,
-        flexShrink: 1,
-        flexWrap: 'wrap',
+        fontSize: 16,
+        color: '#91483c',
+    },
+    sourceText: {
+        fontFamily: 'Fredoka',
+        fontSize: 12,
+        color: '#666',
+        marginTop: 2,
+    },
+    noteText: {
+        fontFamily: 'Fredoka',
+        fontSize: 12,
+        color: '#666',
+        marginTop: 2,
+        fontStyle: 'italic',
     },
     subcategoryMultiline: {
         fontSize: 25,

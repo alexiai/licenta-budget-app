@@ -1,96 +1,83 @@
-import { View, Text, TextInput, TouchableOpacity, FlatList, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, ImageBackground, KeyboardAvoidingView, Platform } from 'react-native';
 import { useState } from 'react';
 import styles from '@styles/incomeStep';
+import bg from '@assets/bg/basicinfobackground.png';
 
 const icons = {
     salary: require('@assets/icons/income.png'),
-    investments: require('@assets/icons/income.png'),
-    freelance: require('@assets/icons/income.png'),
     pension: require('@assets/icons/income.png'),
+    freelancing: require('@assets/icons/income.png'),
+    investments: require('@assets/icons/income.png'),
+    scholarship: require('@assets/icons/income.png'),
     other: require('@assets/icons/income.png'),
 };
 
-const incomeTypes = [
-    { label: 'Salary', value: 'salary' },
-    { label: 'Investments', value: 'investments' },
-    { label: 'Freelance', value: 'freelance' },
-    { label: 'Pension', value: 'pension' },
-    { label: 'Other', value: 'other' },
-];
+const incomeTypes = ['salary', 'pension', 'freelancing', 'investments', 'scholarship', 'other'];
 
 export default function IncomeStep({ onNext, data, updateData }) {
-    const [selectedType, setSelectedType] = useState('salary');
-    const [amount, setAmount] = useState('');
-    const [incomes, setIncomes] = useState(data.incomes || []);
-    const isValidAmount = !isNaN(Number(amount)) && Number(amount) > 0;
+    const [incomes, setIncomes] = useState(
+        data.incomes || {
+            salary: '',
+            pension: '',
+            freelancing: '',
+            investments: '',
+            scholarship: '',
+            other: '',
+        }
+    );
 
+    const handleChange = (type, value) => {
+        setIncomes((prev) => ({ ...prev, [type]: value }));
+    };
 
-    const handleAddIncome = () => {
-        if (!amount) return;
-        setIncomes((prev) => [...prev, { type: selectedType, amount }]);
-        setAmount('');
-        setSelectedType('salary');
+    const getTotalIncome = () => {
+        return Object.values(incomes).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
     };
 
     const handleContinue = () => {
-        updateData({ incomes });
+        const formatted = Object.entries(incomes)
+            .filter(([_, val]) => val)
+            .map(([type, amount]) => ({ type, amount }));
+        updateData({ incomes: formatted });
         onNext();
     };
 
-    const renderIconButton = ({ item }) => (
-        <TouchableOpacity
-            onPress={() => setSelectedType(item.value)}
-            style={[styles.iconButton, selectedType === item.value ? styles.iconActive : styles.iconInactive]}
-        >
-            <Image source={icons[item.value]} style={styles.iconImage} />
-            <Text style={styles.iconLabel}>{item.label}</Text>
-        </TouchableOpacity>
-    );
-
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Income</Text>
-            <Text style={styles.subtitle}>
-                Your regular income will be the amount you have to budget for.
-            </Text>
+        <ImageBackground
+            source={bg}
+            resizeMode="cover"
+            style={{
+                flex: 1,
+                width: '110%',
+                transform: [{ translateX: -20 }, { translateY: -40 }],
+            }}
+        >
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+                <View style={styles.container}>
+                    <Text style={styles.title}>Income</Text>
 
-            <FlatList
-                data={incomeTypes}
-                renderItem={renderIconButton}
-                keyExtractor={(item) => item.value}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.iconList}
-            />
-
-            <TextInput
-                placeholder="Enter amount (RON)"
-                placeholderTextColor="#999"
-                keyboardType="numeric"
-                value={amount}
-                onChangeText={setAmount}
-                style={styles.input}
-            />
-
-            <TouchableOpacity onPress={handleAddIncome} style={[styles.button, !isValidAmount && { backgroundColor: '#ccc' }]} disabled={!isValidAmount}>
-                <Text style={styles.buttonText}>+ Add Income</Text>
-            </TouchableOpacity>
-
-
-            {incomes.length > 0 && (
-                <>
-                    <Text style={styles.label}>Your incomes:</Text>
-                    {incomes.map((inc, i) => (
-                        <Text key={i} style={styles.itemText}>
-                            • {inc.type} — {inc.amount} RON
-                        </Text>
+                    {incomeTypes.map((type) => (
+                        <View key={type} style={styles.row}>
+                            <Image source={icons[type]} style={styles.icon} />
+                            <Text style={styles.label}>{type.charAt(0).toUpperCase() + type.slice(1)}</Text>
+                            <TextInput
+                                style={styles.input}
+                                keyboardType="numeric"
+                                placeholder="0"
+                                placeholderTextColor="#C4A471"
+                                value={incomes[type]}
+                                onChangeText={(val) => handleChange(type, val)}
+                            />
+                        </View>
                     ))}
-                </>
-            )}
 
-            <TouchableOpacity onPress={handleContinue} style={styles.button}>
-                <Text style={styles.buttonText}>Continue</Text>
-            </TouchableOpacity>
-        </View>
+                    <Text style={styles.totalText}>Income: {getTotalIncome()} RON</Text>
+
+                    <TouchableOpacity onPress={handleContinue} style={styles.button}>
+                        <Text style={styles.buttonText}>Next</Text>
+                    </TouchableOpacity>
+                </View>
+            </KeyboardAvoidingView>
+        </ImageBackground>
     );
 }

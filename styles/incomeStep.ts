@@ -3,85 +3,78 @@ import { StyleSheet } from 'react-native';
 export default StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFF8E0',
-        padding: 24,
+        paddingHorizontal: 24,
+        paddingTop: 50,
+        paddingBottom: 40,
     },
     title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#1C1C1C',
-        marginBottom: 8,
+        fontSize: 40,
+        fontWeight: '900',
+        color: '#6B3E26',
         textAlign: 'center',
+        marginBottom: 30,
+        fontFamily: 'Fredoka',
     },
-    subtitle: {
-        fontSize: 16,
-        color: '#7B7B7B',
-        textAlign: 'center',
-        marginBottom: 20,
-    },
-    iconList: {
-        marginVertical: 24,
-    },
-    iconButton: {
+    row: {
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 16,
-        padding: 10,
-        backgroundColor: '#FFF0C8',
-        borderRadius: 14,
+        marginBottom: 20,
+        gap: 12,
     },
-    iconActive: {
-        borderWidth: 2,
-        borderColor: '#F9A825',
+    label: {
+        fontSize: 25,
+        fontWeight: 'bold',
+        color: '#7C4F29',
+        width: 190, // sau cât simți că încap toate frumos
+        fontFamily: 'Fredoka',
     },
-    iconInactive: {
-        opacity: 0.6,
-    },
-    iconImage: {
-        width: 40,
-        height: 40,
-        marginBottom: 4,
-    },
-    iconLabel: {
-        fontSize: 12,
-        color: '#333',
+
+
+    icon: {
+        width: 32,
+        height: 32,
+        resizeMode: 'contain',
+        marginLeft:10
     },
     input: {
-        backgroundColor: '#FFFFFF',
+        //flex: 1,
+        backgroundColor: '#FFF',
         borderRadius: 12,
-        padding: 14,
-        fontSize: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+        fontSize: 18,
         borderWidth: 2,
-        borderColor: '#FFD366',
+        borderColor: '#F7C873',
         color: '#2C2C2C',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        marginBottom: 12,
+        fontFamily: 'Fredoka',
+        width: 100, // sau 90, 80, ajustezi cât de mic vrei
+        marginLeft:50
+
+
+    },
+    totalText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#7C4F29',
+        textAlign: 'center',
+        marginVertical: 20,
+        fontFamily: 'Fredoka',
     },
     button: {
-        backgroundColor: '#FFBC42',
+        marginTop: 10,
+        backgroundColor: '#FFA94D',
         padding: 16,
         borderRadius: 20,
         alignItems: 'center',
-        marginVertical: 10,
+        shadowColor: '#000',
+        shadowOpacity: 0.15,
+        shadowOffset: { width: 0, height: 3 },
+        shadowRadius: 5,
     },
     buttonText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#1E1E1E',
-    },
-    label: {
-        marginTop: 14,
-        marginBottom: 4,
-        fontSize: 14,
-        color: '#555',
-        fontWeight: 'bold',
-    },
-    itemText: {
-        marginLeft: 12,
-        color: '#444',
-        marginBottom: 4,
+        color: '#FFF',
+        fontWeight: '800',
+        fontSize: 22,
+        fontFamily: 'Fredoka',
     },
 });

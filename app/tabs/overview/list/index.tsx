@@ -71,14 +71,22 @@ export default function OverviewListScreen() {
                                 <View style={styles.expenseBox}>
                                     <View style={styles.expenseLeft}>
                                         <Image source={icon} style={styles.icon} />
-                                        <Text
-                                            style={[
-                                                styles.subcategory,
-                                                exp.subcategory?.length > 10 && styles.subcategoryMultiline,
-                                            ]}
-                                        >
-                                            {exp.subcategory}
-                                        </Text>
+                                        <View>
+                                            <Text
+                                                style={[
+                                                    styles.subcategory,
+                                                    exp.subcategory?.length > 10 && styles.subcategoryMultiline,
+                                                ]}
+                                            >
+                                                {exp.subcategory}
+                                            </Text>
+                                            {exp.source === 'bank' && (
+                                                <Text style={styles.sourceText}>Bank Transaction</Text>
+                                            )}
+                                            {exp.note && (
+                                                <Text style={styles.noteText}>{exp.note}</Text>
+                                            )}
+                                        </View>
                                     </View>
 
                                     <View style={styles.amountBlock}>
