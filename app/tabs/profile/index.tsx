@@ -61,17 +61,26 @@ export default function MyProfileScreen() {
 
         try {
             await updateDoc(doc(db, 'users', user.uid), {
-                name,
-                surname,
-                notificationsEnabled,
-                appNotificationsEnabled,
+                bankConnected: false,
+                bankAccountId: null,
+                bankConnectedAt: null,
             });
+
             Alert.alert('Success', 'Profile updated successfully!');
             setIsEditing(false);
         } catch {
             Alert.alert('Error', 'Failed to update profile.');
         }
     };
+    const handleDisconnectBank = async () => {
+        try {
+            await deleteDoc(doc(db, 'bankConnections', user.uid));
+            Alert.alert('Disconnected', 'Bank account disconnected successfully.');
+        } catch (err) {
+            Alert.alert('Error', 'Failed to disconnect bank account.');
+        }
+    };
+
 
     const handlePasswordChange = async () => {
         if (!user || !user.email) return;
@@ -307,6 +316,14 @@ export default function MyProfileScreen() {
                     >
                         <Text style={styles.itemBtnText}>Connect Bank Account</Text>
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.disconnectBtn}
+                        onPress={handleDisconnectBank}
+                    >
+                        <Text style={styles.disconnectBtnText}>Disconnect Bank Account</Text>
+                    </TouchableOpacity>
+
                 </View>
             </ScrollView>
         </ImageBackground>

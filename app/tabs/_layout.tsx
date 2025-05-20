@@ -20,7 +20,7 @@ export default function TabsLayout() {
             }}
         >
             <Tabs.Screen
-                name="overview/index"
+                name="overview/list"
                 options={{
                     tabBarLabel: 'Overview',
                     tabBarIcon: ({ color, size }) => (

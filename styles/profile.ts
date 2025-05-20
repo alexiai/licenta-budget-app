@@ -292,4 +292,30 @@ export default StyleSheet.create({
         fontSize: 16,
     },
 
+    disconnectBtn: {
+        backgroundColor: '#D62828',
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginTop: 15,
+        borderWidth: 2,
+        borderColor: '#9e1e1e',
+    },
+    disconnectBtnText: {
+        fontFamily: 'Fredoka',
+        fontSize: 18,
+        color: 'white',
+        fontWeight: 'bold',
+    },
+
+    bankBtn: {
+        backgroundColor: '#D62828',
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginTop: 15,
+        borderWidth: 2,
+        borderColor: '#9e1e1e',
+    },
+
 });
