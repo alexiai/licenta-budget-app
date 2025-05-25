@@ -1,33 +1,44 @@
-import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import { View, ScrollView, Text, TextInput, TouchableOpacity, Alert, Platform, ImageBackground } from 'react-native';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import styles from '@styles/bank';
-import axios from 'axios';
 import WebView from 'react-native-webview';
-import { Platform, Linking } from 'react-native';
-import {doc, setDoc, updateDoc} from 'firebase/firestore';
-import { auth, db } from '@lib/firebase';
+import axios from 'axios';
+import { Ionicons } from '@expo/vector-icons';
+import background from '@assets/bg/backgroundbankconnect2.png';
 
 export default function BankConnect() {
     const router = useRouter();
-    const [loading, setLoading] = useState(false);
+    const [banks, setBanks] = useState<{ id: string; name: string }[]>([]);
+    const [filteredBanks, setFilteredBanks] = useState<typeof banks>([]);
+    const [search, setSearch] = useState('');
     const [connectUrl, setConnectUrl] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
 
-    const handleConnect = async () => {
+    const fetchBanks = async () => {
+        try {
+            const res = await axios.get('http://192.168.0.1:5000/api/banks');
+            setBanks(res.data);
+            setFilteredBanks(res.data);
+        } catch (err) {
+            Alert.alert('Error', 'Could not load banks.');
+            console.error(err);
+        }
+    };
+
+    const handleConnect = async (institutionId: string) => {
         setLoading(true);
         try {
             const response = await axios.post('http://192.168.0.1:5000/api/connect-gocardless', {
-                redirect: 'http://localhost:8081/tabs/overview/list'
+                institution_id: institutionId,
             });
-            const url = response.data?.link;
 
+            const url = response.data?.link;
             if (!url) throw new Error('Missing redirect URL');
-            console.log('🔗 Connect URL:', url);
 
             if (Platform.OS === 'web') {
-                window.location.href = url; // sau Linking.openURL(url);
+                window.location.href = url;
             } else {
-                setConnectUrl(url); // WebView only on mobile
+                setConnectUrl(url);
             }
         } catch (err: any) {
             console.error('❌ Error connecting GoCardless:', err.response?.data || err.message);
@@ -37,59 +48,140 @@ export default function BankConnect() {
         }
     };
 
-    const saveBankAccountId = async (bankAccountId: string) => {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        await updateDoc(doc(db, 'users', user.uid), {
-            bankAccountId,
-            bankConnected: true,
-            bankConnectedAt: new Date().toISOString(),
-        });
-    };
-
-    const handleWebViewNavigationStateChange = async (navState: any) => {
+    const handleWebViewNavigationStateChange = (navState: any) => {
         const { url } = navState;
-        console.log('🌐 WebView navigation:', url);
         if (url.includes('/tabs/overview/list')) {
             setConnectUrl(null);
-            const requisitionId = new URL(url).searchParams.get('ref'); // sau alta cheie, vezi cum o setezi
-            if (requisitionId) {
-                try {
-                    const res = await axios.get(`http://192.168.0.1:5000/api/account-id?requisition_id=${requisitionId}`);
-                    const accountId = res.data.accountId;
-                    await saveBankAccountId(accountId);
-                } catch (e) {
-                    console.error('❌ Failed to fetch account ID:', e.message);
-                }
-            }
             router.push('/tabs/overview/list');
         }
     };
 
-    return (
-        <View style={styles.container}>
-            {connectUrl && Platform.OS !== 'web' ? (
-                <WebView
-                    source={{ uri: connectUrl }}
-                    style={{ flex: 1 }}
-                    onNavigationStateChange={handleWebViewNavigationStateChange}
-                    startInLoadingState
-                    javaScriptEnabled
-                    domStorageEnabled
-                />
-            ) : (
-                <TouchableOpacity
-                    style={[styles.connectBtn, loading && styles.connectBtnDisabled]}
-                    onPress={handleConnect}
-                    disabled={loading}
-                >
-                    <Text style={styles.connectBtnText}>
-                        {loading ? 'Connecting...' : 'Connect Bank Account'}
-                    </Text>
-                </TouchableOpacity>
-            )}
+    const handleSearch = (text: string) => {
+        setSearch(text);
+        const filtered = banks.filter(bank =>
+            bank.name.toLowerCase().includes(text.toLowerCase())
+        );
+        setFilteredBanks(filtered);
+    };
 
-        </View>
+    useEffect(() => {
+        fetchBanks();
+    }, []);
+
+    if (connectUrl && Platform.OS !== 'web') {
+        return (
+            <WebView
+                source={{ uri: connectUrl }}
+                style={{ flex: 1 }}
+                onNavigationStateChange={handleWebViewNavigationStateChange}
+                startInLoadingState
+                javaScriptEnabled
+                domStorageEnabled
+            />
+        );
+    }
+
+    return (
+        <ImageBackground source={background} style={styles.container} resizeMode="cover">
+            <TouchableOpacity
+                onPress={() => router.push('/tabs/profile')}
+                style={styles.backButton}
+            >
+                <Ionicons name="arrow-back" size={28} color="#91483c" />
+            </TouchableOpacity>
+
+            <TextInput
+                placeholder="Search bank..."
+                placeholderTextColor="#91483c"
+                value={search}
+                onChangeText={handleSearch}
+                style={styles.searchInput}
+            />
+
+            <ScrollView style={{ flex: 1, marginTop: 20 }}>
+                {filteredBanks.length === 0 ? (
+                    <Text style={styles.noResult}>No bank found.</Text>
+                ) : (
+                    <View style={{ gap: 12, paddingHorizontal: 8 }}>
+                        {filteredBanks.map(bank => (
+                            <TouchableOpacity
+                                key={bank.id}
+                                style={[styles.connectBtn, loading && styles.connectBtnDisabled]}
+                                onPress={() => handleConnect(bank.id)}
+                                disabled={loading}
+                            >
+                                <Text style={styles.connectBtnText}>
+                                    {loading ? 'Connecting...' : `Connect to ${bank.name}`}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+            </ScrollView>
+        </ImageBackground>
     );
 }
+
+const styles = {
+    container: {
+        flex: 1,
+        paddingTop: 60,
+        paddingHorizontal: 20,
+        backgroundColor: '#FFE8B0',
+        marginBottom: 60,
+    },
+    backButton: {
+        position: 'absolute',
+        top: 48,
+        left: 10,
+        zIndex: 10,
+        padding: 6,
+    },
+    searchInput: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 16,
+        fontFamily: 'Fredoka',
+        color: '#91483c',
+        borderColor: '#eda82f',
+        borderWidth: 2,
+        alignSelf: 'flex-end', // poziționează spre dreapta
+        width: '58%',          // mai aproape de mâna iepurașului
+        marginTop: 20,
+    },
+    noResult: {
+        fontFamily: 'Fredoka',
+        fontSize: 18,
+        textAlign: 'center',
+        marginTop: 50,
+        color: '#91483c',
+    },
+    connectBtn: {
+        backgroundColor: '#ffe599',
+        borderRadius: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 7,
+        borderColor: '#eda82f',
+        borderWidth: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 4,
+        marginTop:5,
+        marginLeft:5,
+        marginRight:5
+
+    },
+    connectBtnDisabled: {
+        opacity: 0.6,
+    },
+    connectBtnText: {
+        fontFamily: 'Fredoka',
+        fontSize: 18,
+        color: '#91483c',
+        textAlign: 'center',
+    },
+};

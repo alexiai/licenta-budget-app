@@ -5,10 +5,8 @@ import { doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { reauthenticateWithCredential, EmailAuthProvider, updatePassword, deleteUser } from 'firebase/auth';
 import { useRouter } from 'expo-router';
 import styles from '@styles/profile';
-import bg from '@assets/bg/background2.png';
+import bg from '@assets/bg/profilebackrground.png';
 import calendarGood from '@assets/icons/calendarGood.png';
-import { httpsCallable } from "firebase/functions";
-import { functions } from "@lib/firebase";
 
 
 export default function MyProfileScreen() {
