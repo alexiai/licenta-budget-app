@@ -11,6 +11,7 @@ import styles from '@styles/expensesAdd';
 
 export default function AddExpense() {
     const router = useRouter();
+
     const [amount, setAmount] = useState('');
     const [note, setNote] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -18,14 +19,32 @@ export default function AddExpense() {
     const [open, setOpen] = useState(false);
     const [budgetId, setBudgetId] = useState<string | null>(null);
 
+    const [dateInput, setDateInput] = useState('');
+    const [dateError, setDateError] = useState<string | null>(null);
+
     const categoryItems = categories.map((cat) => ({
         label: cat.label,
         value: cat.label,
     }));
 
+    function parseDateInput(input: string): Date | null {
+        const parts = input.split('/');
+        if (parts.length !== 3) return null;
+        const [day, month, year] = parts.map((p) => parseInt(p, 10));
+        if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+        const date = new Date(year, month - 1, day);
+        return isNaN(date.getTime()) ? null : date;
+    }
+
     const handleAddExpense = async () => {
         if (!amount || !selectedCategory || !selectedSubcategory) {
             alert('Please fill in all required fields.');
+            return;
+        }
+
+        const parsedDate = parseDateInput(dateInput);
+        if (!parsedDate) {
+            alert('Please enter a valid date in format dd/mm/yyyy');
             return;
         }
 
@@ -41,7 +60,7 @@ export default function AddExpense() {
                 category: selectedCategory,
                 subcategory: selectedSubcategory,
                 note: note || selectedSubcategory,
-                date: new Date().toISOString(),
+                date: parsedDate.toISOString(),
                 currency: 'RON',
             };
 
@@ -98,6 +117,7 @@ export default function AddExpense() {
                     items={categoryItems}
                     setOpen={setOpen}
                     setValue={setSelectedCategory}
+                    setItems={() => {}}
                     placeholder="Select category"
                     style={styles.dropdown}
                     dropDownContainerStyle={styles.dropdownContainer}
@@ -136,6 +156,22 @@ export default function AddExpense() {
                     onChangeText={setNote}
                     style={styles.input}
                 />
+
+                <Text style={styles.subtitle}>Pick a date</Text>
+                <TextInput
+                    placeholder="ex: 29/05/2025"
+                    value={dateInput}
+                    onChangeText={(text) => {
+                        setDateInput(text);
+                        const parsed = parseDateInput(text);
+                        setDateError(parsed ? null : '❌ Invalid date (use dd/mm/yyyy)');
+                    }}
+                    style={[
+                        styles.input,
+                        dateError && { borderColor: 'red', borderWidth: 2 },
+                    ]}
+                />
+                {dateError && <Text style={{ color: 'red', fontFamily: 'Fredoka' }}>{dateError}</Text>}
 
                 <TouchableOpacity onPress={handleAddExpense} style={styles.button}>
                     <Text style={styles.buttonText}>Save Bunnyspense 🐾</Text>

@@ -27,6 +27,15 @@ export default StyleSheet.create({
         marginLeft:4,
         marginRight:4,
     },
+    datePickerContainer: {
+        marginBottom: 16,
+        borderRadius: 18,
+        overflow: 'hidden',
+        backgroundColor: '#fff',
+        elevation: 2,
+    },
+
+
 
     subtitle: {
         fontSize: 25,
