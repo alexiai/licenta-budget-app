@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
         elevation: 3,
     },
     resultText: {
-        fontSize: 16,
+        fontSize: 17,
         marginBottom: 6,
         color: '#333',
     },
