@@ -149,4 +149,24 @@ export default StyleSheet.create({
         top: -20,
         left: 10,
     },
+    periodNavigation: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        marginTop: 10,
+    },
+    periodArrow: {
+        padding: 10,
+    },
+    periodTitle: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    periodText: {
+        fontSize: 14,
+        color: '#91483c',
+        fontWeight: '500',
+        marginTop: 2,
+    },
 });

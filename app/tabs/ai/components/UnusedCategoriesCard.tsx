@@ -10,8 +10,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SpendingAnalysis } from './SmartAdviceSection';
 
+
 interface UnusedCategoriesCardProps {
-    analysis: SpendingAnalysis;
+    analysis?: SpendingAnalysis;
 }
 
 interface CategoryInsight {
@@ -26,7 +27,10 @@ interface CategoryInsight {
 export default function UnusedCategoriesCard({ analysis }: UnusedCategoriesCardProps): JSX.Element {
     const getCategoryInsights = (): CategoryInsight[] => {
         const insights: CategoryInsight[] = [];
-        const { unusedCategories, categoryBreakdown } = analysis;
+
+        if (!analysis) return insights;
+
+        const { unusedCategories = [], categoryBreakdown = {} } = analysis;
 
         // Category mappings with bunny-themed insights
         const categoryData = {
@@ -280,10 +284,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         borderRadius: 16,
         padding: 20,
-        shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 8,
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
         elevation: 3,
         borderWidth: 1,
         borderColor: '#f0f0f0',

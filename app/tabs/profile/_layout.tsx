@@ -1,7 +1,6 @@
-
-// app/tabs/overview/_layout.tsx
+// app/tabs/profile/_layout.tsx
 import { Stack } from 'expo-router';
 
-export default function OverviewLayout() {
+export default function ProfileLayout() {
     return <Stack screenOptions={{ headerShown: false }} />;
 }

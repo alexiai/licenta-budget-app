@@ -1,6 +1,3 @@
-console.log('📦 Loaded: onboarding/index.tsx');
-
-
 export const options = {
     href: null,
 };

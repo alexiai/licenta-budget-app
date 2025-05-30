@@ -1,50 +1,100 @@
-// overview/list/index.tsx - redesigned version
+
+// overview/list/index.tsx - with budget period filtering
 import { View, Text, FlatList, TouchableOpacity, ImageBackground, Image } from 'react-native';
 import { useEffect, useState } from 'react';
 import { db, auth } from '@lib/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import OverviewHeader from '@components/OverviewHeader';
 import bg from '@assets/bg/background3.png';
 import bunnyIcon from '@assets/icons/bunnyhead.png';
 import categories from '@lib/categories';
+import { filterExpensesByPeriod, getPeriodTitle } from '@lib/utils/expenseFilters';
 import styles from '@styles/overviewList';
 
 export default function OverviewListScreen() {
     const [expensesByDate, setExpensesByDate] = useState<any>({});
     const [totalCarrotCoins, setTotalCarrotCoins] = useState(0);
+    const [allExpenses, setAllExpenses] = useState<any[]>([]);
+    const [selectedBudget, setSelectedBudget] = useState<any>(null);
+    const [periodOffset, setPeriodOffset] = useState(0);
     const router = useRouter();
 
-    useEffect(() => {
-        const fetchExpenses = async () => {
-            const user = auth.currentUser;
-            if (!user) return;
+    const fetchExpenses = async () => {
+        const user = auth.currentUser;
+        if (!user) return;
 
-            const q = query(
-                collection(db, 'expenses'),
-                where('userId', '==', user.uid),
-                orderBy('date', 'desc')
-            );
-            const snapshot = await getDocs(q);
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const q = query(
+            collection(db, 'expenses'),
+            where('userId', '==', user.uid),
+            orderBy('date', 'desc')
+        );
+        const snapshot = await getDocs(q);
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setAllExpenses(data);
+    };
 
-            const grouped: any = {};
-            let total = 0;
-            data.forEach(exp => {
-                const date = new Date(exp.date).toLocaleDateString('en-US', {
-                    month: 'long', day: 'numeric'
-                });
-                if (!grouped[date]) grouped[date] = [];
-                grouped[date].push(exp);
-                total += parseFloat(exp.amount || '0');
+    const fetchBudget = async (budgetId: string) => {
+        if (!budgetId) return;
+
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const q = query(collection(db, 'budgets'), where('userId', '==', user.uid));
+        const snapshot = await getDocs(q);
+        const budget = snapshot.docs.find(doc => doc.id === budgetId);
+
+        if (budget) {
+            setSelectedBudget({ id: budget.id, ...budget.data() });
+        }
+    };
+
+    const processExpenses = () => {
+        if (!allExpenses.length) return;
+
+        let filteredExpenses = allExpenses;
+
+        if (selectedBudget) {
+            filteredExpenses = filterExpensesByPeriod(allExpenses, selectedBudget, periodOffset);
+        }
+
+        const grouped: any = {};
+        let total = 0;
+
+        filteredExpenses.forEach(exp => {
+            const date = new Date(exp.date).toLocaleDateString('en-US', {
+                month: 'long', day: 'numeric'
             });
+            if (!grouped[date]) grouped[date] = [];
+            grouped[date].push(exp);
+            total += parseFloat(exp.amount || '0');
+        });
 
-            setExpensesByDate(grouped);
-            setTotalCarrotCoins(total);
-        };
+        setExpensesByDate(grouped);
+        setTotalCarrotCoins(total);
+    };
 
+    useEffect(() => {
         fetchExpenses();
     }, []);
+
+    useEffect(() => {
+        processExpenses();
+    }, [allExpenses, selectedBudget, periodOffset]);
+
+    const handleBudgetChange = (budgetId: string | null) => {
+        if (budgetId) {
+            fetchBudget(budgetId);
+        } else {
+            setSelectedBudget(null);
+        }
+        setPeriodOffset(0); // Reset to current period when budget changes
+    };
+
+    const navigatePeriod = (direction: 'prev' | 'next') => {
+        setPeriodOffset(prev => prev + (direction === 'prev' ? -1 : 1));
+    };
 
     const categoryIcons = categories.reduce((acc, cat) => {
         cat.subcategories.forEach(sub => {
@@ -53,10 +103,35 @@ export default function OverviewListScreen() {
         return acc;
     }, {});
 
+    const periodTitle = selectedBudget ? getPeriodTitle(selectedBudget, periodOffset) : 'All Time';
+
     return (
         <ImageBackground source={bg} resizeMode="cover" style={styles.container}>
-            <OverviewHeader />
-            <Text style={styles.title}>Your Carrot Trail</Text>
+            <OverviewHeader onBudgetChange={handleBudgetChange} />
+
+            <View style={styles.periodNavigation}>
+                <TouchableOpacity
+                    style={styles.periodArrow}
+                    onPress={() => navigatePeriod('prev')}
+                    disabled={!selectedBudget}
+                >
+                    <Ionicons name="chevron-back" size={24} color={selectedBudget ? "#91483c" : "#ccc"} />
+                </TouchableOpacity>
+
+                <View style={styles.periodTitle}>
+                    <Text style={styles.title}>Your Carrot Trail</Text>
+                    <Text style={styles.periodText}>{periodTitle}</Text>
+                </View>
+
+                <TouchableOpacity
+                    style={styles.periodArrow}
+                    onPress={() => navigatePeriod('next')}
+                    disabled={!selectedBudget}
+                >
+                    <Ionicons name="chevron-forward" size={24} color={selectedBudget ? "#91483c" : "#ccc"} />
+                </TouchableOpacity>
+            </View>
+
             <Text style={styles.balance}>Burrow Balance: {totalCarrotCoins}</Text>
 
             <FlatList
@@ -68,7 +143,7 @@ export default function OverviewListScreen() {
                         {expenses.map((exp: any) => {
                             const icon = categoryIcons[exp.subcategory?.toLowerCase()] || require('@assets/icons/default.png');
                             return (
-                                <View style={styles.expenseBox}>
+                                <View key={exp.id} style={styles.expenseBox}>
                                     <View style={styles.expenseLeft}>
                                         <Image source={icon} style={styles.icon} />
                                         <View>
@@ -100,8 +175,6 @@ export default function OverviewListScreen() {
                                         <Text style={styles.carrotCoinText}>CarrotCoins</Text>
                                     </View>
                                 </View>
-
-
                             );
                         })}
                     </View>

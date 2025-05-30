@@ -73,8 +73,12 @@ export default StyleSheet.create({
     pieSection: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         marginBottom: 20,
+        flexWrap: 'wrap', // pentru a permite wrap pe ecrane mici
+        gap: 10,
     },
+
 
     ////////////////insights///////////////////
     scrollableContent: {
@@ -164,5 +168,25 @@ export default StyleSheet.create({
         fontWeight: 'bold',
         fontFamily: 'Fredoka',
         color: '#D45920',
+    },
+    periodNavigation: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        marginBottom: 10,
+    },
+    periodArrow: {
+        padding: 10,
+    },
+    periodTitle: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    periodText: {
+        fontSize: 14,
+        color: '#91483c',
+        fontWeight: '500',
+        marginTop: 2,
     },
 });

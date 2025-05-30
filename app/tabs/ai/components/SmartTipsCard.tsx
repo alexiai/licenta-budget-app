@@ -10,8 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SpendingAnalysis, ExpenseData } from './SmartAdviceSection';
 
 interface SmartTipsCardProps {
-    analysis: SpendingAnalysis;
-    expenses: ExpenseData[];
+    analysis?: SpendingAnalysis;
 }
 
 interface SmartTip {
@@ -25,12 +24,20 @@ interface SmartTip {
     priority: 'high' | 'medium' | 'low';
 }
 
-export default function SmartTipsCard({ analysis, expenses }: SmartTipsCardProps): JSX.Element {
+export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Element {
     const generateSmartTips = (): SmartTip[] => {
         const tips: SmartTip[] = [];
 
+        if (!analysis) return tips;
+
         // Analyze spending patterns and generate contextual tips
-        const { topCategories, totalThisMonth, totalLastMonth, subcategoryBreakdown, categoryBreakdown } = analysis;
+        const {
+            topCategories = [],
+            totalThisMonth = 0,
+            totalLastMonth = 0,
+            subcategoryBreakdown = {},
+            categoryBreakdown = {}
+        } = analysis;
 
         // High spending category tips
         topCategories.forEach((categoryData, index) => {
@@ -166,11 +173,12 @@ export default function SmartTipsCard({ analysis, expenses }: SmartTipsCardProps
         }
 
         // Daily spending pattern
-        if (analysis.averageDailySpending > 100) {
+        const averageDailySpending = analysis.averageDailySpending || 0;
+        if (averageDailySpending > 100) {
             tips.push({
                 id: 'daily-spending',
                 title: '📅 Bunny\'s Daily Wisdom',
-                description: `Average daily spending: ${analysis.averageDailySpending.toFixed(0)} RON. Try setting a daily limit of 80 RON. Small hops lead to big journeys! 🐰👣`,
+                description: `Average daily spending: ${averageDailySpending.toFixed(0)} RON. Try setting a daily limit of 80 RON. Small hops lead to big journeys! 🐰👣`,
                 icon: 'calendar',
                 emoji: '🐰📅',
                 priority: 'medium'
@@ -296,10 +304,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         borderRadius: 16,
         padding: 20,
-        shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 8,
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
         elevation: 3,
         borderWidth: 1,
         borderColor: '#f0f0f0',

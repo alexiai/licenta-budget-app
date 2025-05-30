@@ -34,6 +34,25 @@ export default StyleSheet.create({
         backgroundColor: '#fff',
         elevation: 2,
     },
+    picker: {
+        backgroundColor: '#FFF2D8',
+        borderRadius: 18,
+        borderWidth: 0,
+        marginBottom: 16,
+        marginLeft: 4,
+        marginRight: 4,
+    },
+    dropdownContainer: {
+        backgroundColor: '#FFF2D8',
+        borderRadius: 18,
+        borderWidth: 0,
+        marginLeft: 4,
+        marginRight: 4,
+    },
+    pickerText: {
+        fontSize: 19,
+        fontFamily: 'Fredoka',
+    },
 
 
 
