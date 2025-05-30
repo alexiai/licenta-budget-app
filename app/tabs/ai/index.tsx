@@ -9,13 +9,13 @@ import {
     ScrollView,
     Alert,
     ActivityIndicator,
-    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
-import { categories } from '../../../lib/categories';
+import  categories from '../../../lib/categories';
 import { addDoc, collection } from 'firebase/firestore';
 import { auth, db } from '../../../lib/firebase';
+import { romanianToEnglish } from '../../../lib/translationDictionary';
 
 interface ChatMessage {
     id: string;
@@ -57,7 +57,8 @@ export default function AiScreen(): JSX.Element {
     const [awaitingInput, setAwaitingInput] = useState<string | null>(null);
     const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
 
-    const scrollViewRef = useRef<ScrollView>(null);
+    const scrollViewRef = useRef<ScrollView | null>(null);
+
 
     const [recognition, setRecognition] = useState<any>(null);
 
@@ -467,7 +468,7 @@ export default function AiScreen(): JSX.Element {
                     }
                 } else {
                     addMessage('Mulțumesc! Pentru ce categorie a fost această cheltuială?', false);
-                    generateFollowUpQuestions({ ...currentParsing, amount });
+                    generateFollowUpQuestions({ ...currentParsing, amount, confidence: 0 });
                 }
             } else {
                 addMessage('Nu am putut identifica suma. Te rog să specifici un număr (ex: 50, 25.5)', false);
@@ -520,8 +521,11 @@ export default function AiScreen(): JSX.Element {
                 } else {
                     // Show subcategory options as fallback
                     addMessage('Nu am recunoscut subcategoria. Te rog să alegi din opțiunile de mai jos:', false);
+                    if (currentParsing?.category) {
                     askForSubcategory(currentParsing.category!, currentCategory.subcategories);
                     speakText('Nu am recunoscut subcategoria. Te rog să alegi din opțiunile afișate.');
+                    }
+
                 }
             }
         }
