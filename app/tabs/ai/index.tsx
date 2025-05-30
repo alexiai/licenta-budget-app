@@ -242,6 +242,51 @@ export default function AiScreen(): JSX.Element {
         return 'ro';
     };
 
+    const parseRelativeDate = (text: string): string | null => {
+        const combinedText = text.toLowerCase();
+
+        // Enhanced relative date patterns for Romanian and English
+        const relativeDatePatterns = [
+            // Romanian patterns
+            { pattern: /(?:acum\s+)?(\d+)\s+(?:zile|zi)\s+(?:în urmă|inainte)/gi, unit: 'days', multiplier: -1 },
+            { pattern: /(?:acum\s+)?(\d+)\s+(?:săptămâni|săptămână)\s+(?:în urmă|inainte)/gi, unit: 'weeks', multiplier: -1 },
+            { pattern: /(?:acum\s+)?(\d+)\s+(?:luni|lună)\s+(?:în urmă|inainte)/gi, unit: 'months', multiplier: -1 },
+            { pattern: /(?:peste\s+)?(\d+)\s+(?:zile|zi)/gi, unit: 'days', multiplier: 1 },
+            { pattern: /(?:peste\s+)?(\d+)\s+(?:săptămâni|săptămână)/gi, unit: 'weeks', multiplier: 1 },
+
+            // English patterns
+            { pattern: /(\d+)\s+days?\s+ago/gi, unit: 'days', multiplier: -1 },
+            { pattern: /(\d+)\s+weeks?\s+ago/gi, unit: 'weeks', multiplier: -1 },
+            { pattern: /(\d+)\s+months?\s+ago/gi, unit: 'months', multiplier: -1 },
+            { pattern: /in\s+(\d+)\s+days?/gi, unit: 'days', multiplier: 1 },
+            { pattern: /in\s+(\d+)\s+weeks?/gi, unit: 'weeks', multiplier: 1 },
+        ];
+
+        for (const { pattern, unit, multiplier } of relativeDatePatterns) {
+            const match = combinedText.match(pattern);
+            if (match) {
+                const numberMatch = match[0].match(/(\d+)/);
+                if (numberMatch) {
+                    const number = parseInt(numberMatch[1]) * multiplier;
+                    const targetDate = new Date();
+
+                    if (unit === 'days') {
+                        targetDate.setDate(targetDate.getDate() + number);
+                    } else if (unit === 'weeks') {
+                        targetDate.setDate(targetDate.getDate() + (number * 7));
+                    } else if (unit === 'months') {
+                        targetDate.setMonth(targetDate.getMonth() + number);
+                    }
+
+                    console.log(`🗓️ Relative date detected: "${match[0]}" → ${targetDate.toISOString().split('T')[0]}`);
+                    return targetDate.toISOString().split('T')[0];
+                }
+            }
+        }
+
+        return null;
+    };
+
     const parseExpenseFromText = async (text: string): Promise<ParsedExpense> => {
         const originalText = text;
         let translatedText = text;
@@ -276,38 +321,62 @@ export default function AiScreen(): JSX.Element {
             }
         }
 
-        // Extract date
-        const datePatterns = [
-            /(?:azi|today|astăzi)/gi,
-            /(?:ieri|yesterday)/gi,
-            /(?:alaltăieri|day before yesterday)/gi,
-            /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/,
-        ];
+        // Enhanced date extraction with relative date support
+        const combinedText = (originalText + ' ' + translatedText).toLowerCase();
 
-        for (const pattern of datePatterns) {
-            if (pattern.test(text)) {
-                if (/(?:azi|today|astăzi)/gi.test(text)) {
-                    result.date = new Date().toISOString().split('T')[0];
-                } else if (/(?:ieri|yesterday)/gi.test(text)) {
-                    const yesterday = new Date();
-                    yesterday.setDate(yesterday.getDate() - 1);
-                    result.date = yesterday.toISOString().split('T')[0];
-                } else if (/(?:alaltăieri|day before yesterday)/gi.test(text)) {
-                    const dayBefore = new Date();
-                    dayBefore.setDate(dayBefore.getDate() - 2);
-                    result.date = dayBefore.toISOString().split('T')[0];
+        // First try relative date parsing
+        const relativeDate = parseRelativeDate(combinedText);
+        if (relativeDate) {
+            result.date = relativeDate;
+            result.confidence += 25;
+        } else {
+            // Then try absolute date patterns
+            const absoluteDatePatterns = [
+                /(?:azi|today|astăzi)/gi,
+                /(?:ieri|yesterday)/gi,
+                /(?:alaltăieri|day before yesterday)/gi,
+                /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/,
+            ];
+
+            for (const pattern of absoluteDatePatterns) {
+                if (pattern.test(text)) {
+                    if (/(?:azi|today|astăzi)/gi.test(text)) {
+                        result.date = new Date().toISOString().split('T')[0];
+                    } else if (/(?:ieri|yesterday)/gi.test(text)) {
+                        const yesterday = new Date();
+                        yesterday.setDate(yesterday.getDate() - 1);
+                        result.date = yesterday.toISOString().split('T')[0];
+                    } else if (/(?:alaltăieri|day before yesterday)/gi.test(text)) {
+                        const dayBefore = new Date();
+                        dayBefore.setDate(dayBefore.getDate() - 2);
+                        result.date = dayBefore.toISOString().split('T')[0];
+                    } else {
+                        // Handle explicit date format (dd/mm/yyyy)
+                        const dateMatch = text.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+                        if (dateMatch) {
+                            const day = parseInt(dateMatch[1]);
+                            const month = parseInt(dateMatch[2]) - 1; // JavaScript months are 0-indexed
+                            const year = parseInt(dateMatch[3]);
+                            const fullYear = year < 100 ? 2000 + year : year;
+
+                            const parsedDate = new Date(fullYear, month, day);
+                            if (!isNaN(parsedDate.getTime())) {
+                                result.date = parsedDate.toISOString().split('T')[0];
+                            }
+                        }
+                    }
+                    result.confidence += 20;
+                    break;
                 }
-                result.confidence += 20;
-                break;
             }
         }
 
         // Smart category and subcategory matching using product associations
-        const combinedText = (originalText + ' ' + translatedText).toLowerCase();
-        console.log(`🔍 Analyzing text for categories: "${combinedText}"`);
+        const categoryText = (originalText + ' ' + translatedText).toLowerCase();
+        console.log(`🔍 Analyzing text for categories: "${categoryText}"`);
 
         // Try product associations first (more specific)
-        const productMatch = findCategoryByProduct(combinedText);
+        const productMatch = findCategoryByProduct(categoryText);
         if (productMatch) {
             result.category = productMatch.category;
             result.subcategory = productMatch.subcategory;
@@ -318,7 +387,7 @@ export default function AiScreen(): JSX.Element {
             const categoryMapping = createCategoryMapping();
             for (const [keywords, categoryInfo] of Object.entries(categoryMapping)) {
                 const keywordList = keywords.split(',').map(k => k.trim().toLowerCase());
-                if (keywordList.some(keyword => combinedText.includes(keyword))) {
+                if (keywordList.some(keyword => categoryText.includes(keyword))) {
                     result.category = categoryInfo.category;
                     result.subcategory = categoryInfo.subcategory;
                     result.confidence += 25;
@@ -328,10 +397,8 @@ export default function AiScreen(): JSX.Element {
             }
         }
 
-        // Default date if not found
-        if (!result.date) {
-            result.date = new Date().toISOString().split('T')[0];
-        }
+        // DON'T set a default date - let the follow-up logic handle missing dates
+        console.log(`📊 Parsing result: amount=${result.amount}, category=${result.category}, date=${result.date}, confidence=${result.confidence}`);
 
         return result;
     };
@@ -393,6 +460,53 @@ export default function AiScreen(): JSX.Element {
         if (!parsed.amount) {
             questions.push('Cât ai cheltuit? Te rog să specifici suma.');
             setAwaitingInput('amount');
+        } else if (!parsed.date) {
+            questions.push('Când a avut loc această cheltuială? Poți spune "azi", "ieri", "acum 3 zile" sau o dată specifică.');
+
+            // Add quick date options
+            const dateOptions = [
+                { text: 'Azi', date: new Date().toISOString().split('T')[0] },
+                { text: 'Ieri', date: (() => {
+                        const yesterday = new Date();
+                        yesterday.setDate(yesterday.getDate() - 1);
+                        return yesterday.toISOString().split('T')[0];
+                    })() },
+                { text: 'Acum 2 zile', date: (() => {
+                        const twoDaysAgo = new Date();
+                        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+                        return twoDaysAgo.toISOString().split('T')[0];
+                    })() },
+                { text: 'Acum o săptămână', date: (() => {
+                        const weekAgo = new Date();
+                        weekAgo.setDate(weekAgo.getDate() - 7);
+                        return weekAgo.toISOString().split('T')[0];
+                    })() }
+            ];
+
+            dateOptions.forEach(option => {
+                replies.push({
+                    text: option.text,
+                    action: () => {
+                        setCurrentParsing(prev => ({ ...prev, date: option.date }));
+                        setQuickReplies([]);
+                        setAwaitingInput(null);
+
+                        // Check if we have enough info to save
+                        if (currentParsing?.amount && currentParsing?.category && currentParsing?.subcategory) {
+                            saveExpense({ ...currentParsing, date: option.date });
+                        } else if (!currentParsing?.category) {
+                            generateFollowUpQuestions({ ...currentParsing, date: option.date, amount: parsed.amount!, confidence: 0 });
+                        } else if (!currentParsing?.subcategory) {
+                            const categoryData = categories.find(c => c.label === currentParsing.category);
+                            if (categoryData) {
+                                askForSubcategory(currentParsing.category, categoryData.subcategories);
+                            }
+                        }
+                    }
+                });
+            });
+
+            setAwaitingInput('date');
         } else if (!parsed.category) {
             questions.push('Pentru ce categorie a fost această cheltuială? Alege una din opțiunile de mai jos:');
 
@@ -477,20 +591,40 @@ export default function AiScreen(): JSX.Element {
                 const amount = parseFloat(amountMatch[1].replace(',', '.'));
                 setCurrentParsing(prev => ({ ...prev, amount }));
 
-                if (currentParsing?.category && currentParsing?.subcategory) {
+                if (currentParsing?.date && currentParsing?.category && currentParsing?.subcategory) {
                     saveExpense({ ...currentParsing, amount });
-                } else if (currentParsing?.category) {
-                    const categoryData = categories.find(c => c.label === currentParsing.category);
-                    if (categoryData) {
-                        askForSubcategory(currentParsing.category, categoryData.subcategories);
-                    }
                 } else {
-                    addMessage('Mulțumesc! Pentru ce categorie a fost această cheltuială?', false);
-                    generateFollowUpQuestions({ ...currentParsing, amount, confidence: 0 });
+                    // Continue with follow-up questions for missing info
+                    const nextQuestion = generateFollowUpQuestions({ ...currentParsing, amount, confidence: 0 });
+                    if (!nextQuestion) {
+                        addMessage('Mulțumesc! Mai am nevoie de câteva detalii.', false);
+                    }
                 }
             } else {
                 addMessage('Nu am putut identifica suma. Te rog să specifici un număr (ex: 50, 25.5)', false);
                 speakText('Nu am putut identifica suma. Te rog să specifici un număr.');
+            }
+        } else if (awaitingInput === 'date') {
+            // Try to parse the date input
+            const parsedDateInput = await parseExpenseFromText(input);
+            if (parsedDateInput.date) {
+                setCurrentParsing(prev => ({ ...prev, date: parsedDateInput.date }));
+                setAwaitingInput(null);
+                setQuickReplies([]);
+
+                // Check if we have enough info to save
+                if (currentParsing?.amount && currentParsing?.category && currentParsing?.subcategory) {
+                    saveExpense({ ...currentParsing, date: parsedDateInput.date });
+                } else {
+                    // Continue with follow-up questions for missing info
+                    const nextQuestion = generateFollowUpQuestions({ ...currentParsing, date: parsedDateInput.date, confidence: 0 });
+                    if (!nextQuestion) {
+                        addMessage('Mulțumesc! Mai am nevoie de câteva detalii.', false);
+                    }
+                }
+            } else {
+                addMessage('Nu am putut înțelege data. Te rog să specifici când a avut loc cheltuiala (ex: "azi", "ieri", "acum 3 zile", "15/12/2024")', false);
+                speakText('Nu am putut înțelege data. Te rog să specifici când a avut loc cheltuiala.');
             }
         } else if (awaitingInput === 'category') {
             // Try to find matching category from input
@@ -550,8 +684,8 @@ export default function AiScreen(): JSX.Element {
     };
 
     const saveExpense = async (expense: Partial<ParsedExpense>) => {
-        if (!expense.amount || !expense.category) {
-            addMessage('Îmi pare rău, nu am toate informațiile necesare pentru a salva cheltuiala.', false);
+        if (!expense.amount || !expense.category || !expense.date) {
+            addMessage('Îmi pare rău, nu am toate informațiile necesare pentru a salva cheltuiala (sumă, categorie și dată).', false);
             speakText('Nu am toate informațiile necesare pentru a salva cheltuiala.');
             return;
         }
