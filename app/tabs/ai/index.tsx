@@ -16,6 +16,7 @@ import  categories from '../../../lib/categories';
 import { addDoc, collection } from 'firebase/firestore';
 import { auth, db } from '../../../lib/firebase';
 import { romanianToEnglish } from '../../../lib/translationDictionary';
+import { findCategoryByProduct } from '../../../lib/productAssociations';
 
 interface ChatMessage {
     id: string;
@@ -173,6 +174,7 @@ export default function AiScreen(): JSX.Element {
         try {
             if (fromLang === 'ro' && toLang === 'en') {
                 let translatedText = text.toLowerCase();
+                const originalText = translatedText;
 
                 // Sort by length (longest first) to avoid partial replacements
                 const sortedEntries = Object.entries(romanianToEnglish)
@@ -181,9 +183,13 @@ export default function AiScreen(): JSX.Element {
                 // Replace Romanian words with English equivalents
                 sortedEntries.forEach(([ro, en]) => {
                     const regex = new RegExp(`\\b${ro}\\b`, 'gi');
-                    translatedText = translatedText.replace(regex, en);
+                    if (regex.test(translatedText)) {
+                        console.log(`🔄 Translation: "${ro}" → "${en}"`);
+                        translatedText = translatedText.replace(regex, en);
+                    }
                 });
 
+                console.log(`📝 Full translation: "${text}" → "${translatedText}"`);
                 return translatedText;
             }
 
@@ -296,17 +302,29 @@ export default function AiScreen(): JSX.Element {
             }
         }
 
-        // Smart category and subcategory matching
-        const categoryMapping = createCategoryMapping();
+        // Smart category and subcategory matching using product associations
         const combinedText = (originalText + ' ' + translatedText).toLowerCase();
+        console.log(`🔍 Analyzing text for categories: "${combinedText}"`);
 
-        for (const [keywords, categoryInfo] of Object.entries(categoryMapping)) {
-            const keywordList = keywords.split(',').map(k => k.trim().toLowerCase());
-            if (keywordList.some(keyword => combinedText.includes(keyword))) {
-                result.category = categoryInfo.category;
-                result.subcategory = categoryInfo.subcategory;
-                result.confidence += 25;
-                break;
+        // Try product associations first (more specific)
+        const productMatch = findCategoryByProduct(combinedText);
+        if (productMatch) {
+            result.category = productMatch.category;
+            result.subcategory = productMatch.subcategory;
+            result.confidence += productMatch.confidence;
+            console.log(`✅ Product association match: ${productMatch.category} (${productMatch.subcategory}) - confidence: ${productMatch.confidence}%`);
+        } else {
+            // Fallback to manual category mapping
+            const categoryMapping = createCategoryMapping();
+            for (const [keywords, categoryInfo] of Object.entries(categoryMapping)) {
+                const keywordList = keywords.split(',').map(k => k.trim().toLowerCase());
+                if (keywordList.some(keyword => combinedText.includes(keyword))) {
+                    result.category = categoryInfo.category;
+                    result.subcategory = categoryInfo.subcategory;
+                    result.confidence += 25;
+                    console.log(`✅ Manual mapping match: ${categoryInfo.category} (${categoryInfo.subcategory})`);
+                    break;
+                }
             }
         }
 
@@ -522,8 +540,8 @@ export default function AiScreen(): JSX.Element {
                     // Show subcategory options as fallback
                     addMessage('Nu am recunoscut subcategoria. Te rog să alegi din opțiunile de mai jos:', false);
                     if (currentParsing?.category) {
-                    askForSubcategory(currentParsing.category!, currentCategory.subcategories);
-                    speakText('Nu am recunoscut subcategoria. Te rog să alegi din opțiunile afișate.');
+                        askForSubcategory(currentParsing.category!, currentCategory.subcategories);
+                        speakText('Nu am recunoscut subcategoria. Te rog să alegi din opțiunile afișate.');
                     }
 
                 }
