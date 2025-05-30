@@ -1,4 +1,3 @@
-
 export interface ProductAssociation {
     keywords: string[];
     category: string;
@@ -41,7 +40,7 @@ export const productAssociations: ProductAssociation[] = [
 
     // TRANSPORT - CAR MAINTENANCE
     {
-        keywords: ['service auto', 'reparații auto', 'revizie', 'schimb ulei', 'anvelope', 'cauciucuri', 'frâne', 'baterie auto', 'acumulator', 'filtru', 'bujii', 'mecanic', 'vulcanizare', 'spălătorie auto', 'car wash'],
+        keywords: ['service auto', 'reparații auto', 'revizie', 'schimb ulei', 'anvelope', 'cauciucuri', 'frâne', 'baterie auto', 'acumulator', 'filtru', 'bujii', 'mecanic', 'vulcanizare', 'spălătorie auto', 'car wash', 'verificare tehnică', 'itp', 'rca', 'casco', 'asigurare auto', 'rovinieta', 'taxa pod', 'taxa drum', 'amenda'],
         category: 'Transport',
         subcategory: 'Car Maintenance',
         confidence: 90
@@ -85,6 +84,14 @@ export const productAssociations: ProductAssociation[] = [
         category: 'Food & Drinks',
         subcategory: 'Fast Food',
         confidence: 95
+    },
+
+    // FOOD & DRINKS - DESSERTS/SNACKS
+    {
+        keywords: ['gogoașă', 'gogoasa', 'gogoși', 'gogosi', 'donut', 'donuts', 'papanași', 'papanasi', 'clătite', 'clatite', 'pancakes', 'vafe', 'waffles', 'churros', 'ecler', 'eclere', 'profiterol', 'cremșnit', 'cremsnit', 'savarina', 'cozonac', 'mucenici', 'colaci', 'covrig', 'covrigi', 'bagel', 'croissant', 'briosa', 'briose', 'muffin', 'cupcake', 'brownie', 'cookies', 'biscuit', 'înghețată', 'inghetata', 'gelato', 'desert', 'deserturi', 'dulciuri', 'bomboane', 'prăjituri', 'prajituri', 'tort', 'ciocolată', 'ciocolata'],
+        category: 'Food & Drinks',
+        subcategory: 'Groceries',
+        confidence: 85
     },
 
     // FOOD & DRINKS - DELIVERY
@@ -150,7 +157,7 @@ export const productAssociations: ProductAssociation[] = [
 
     // LIFESTYLE - BEAUTY
     {
-        keywords: ['frumusețe', 'beauty', 'cosmetice', 'cosmetics', 'machiaj', 'makeup', 'parfum', 'perfume', 'cremă', 'cream', 'loțiune', 'lotion', 'șampon', 'shampoo', 'balsam', 'conditioner', 'gel', 'deodorant', 'antiperspirant', 'săpun', 'soap', 'gel de duș', 'shower gel', 'pastă de dinți', 'toothpaste', 'periuță de dinți', 'toothbrush', 'fir dental', 'dental floss', 'apă de gură', 'mouthwash', 'sephora', 'douglas', 'notino', 'makeup revolution', 'maybelline', 'loreal', 'nivea', 'dove', 'pantene', 'head&shoulders', 'salon', 'coafor', 'frizer', 'manichiură', 'pedichiură', 'masaj', 'spa'],
+        keywords: ['frumusețe', 'beauty', 'cosmetice', 'cosmetics', 'machiaj', 'makeup', 'parfum', 'perfume', 'cremă', 'cream', 'loțiune', 'lotion', 'șampon', 'shampoo', 'balsam', 'conditioner', 'gel', 'deodorant', 'antiperspirant', 'săpun', 'soap', 'gel de duș', 'shower gel', 'pastă de dinți', 'toothpaste', 'periuță de dinți', 'toothbrush', 'fir dental', 'dental floss', 'apă de gură', 'mouthwash', 'sephora', 'douglas', 'notino', 'makeup revolution', 'maybelline', 'loreal', 'nivea', 'dove', 'pantene', 'head&shoulders', 'salon', 'coafor', 'frizer', 'manichiură', 'pedichiură', 'masaj', 'spa', 'tunsoare', 'vopsire păr', 'highlights', 'balayage', 'tratament păr', 'epilare', 'ceară', 'laser', 'botox', 'filler'],
         category: 'Lifestyle',
         subcategory: 'Beauty',
         confidence: 85
