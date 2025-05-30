@@ -1,14 +1,6 @@
 // ✅ BudgetScreen.tsx
 import { useEffect, useState } from 'react';
-import {
-    View,
-    Text,
-    TouchableOpacity,
-    FlatList,
-    ActivityIndicator,
-    ImageBackground,
-    Image,
-} from 'react-native';
+import {View, Text, TouchableOpacity, FlatList, ActivityIndicator, ImageBackground, Image,} from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,7 +8,8 @@ import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'fireb
 import { auth, db } from '@lib/firebase';
 import BudgetSelector from '@components/BudgetSelector';
 import styles from '@styles/budget';
-import { PieChart } from 'react-native-svg-charts';
+import { Dimensions } from 'react-native';
+import { PieChart as ChartKitPie } from 'react-native-chart-kit';
 import EditBudget from './EditBudget';
 import bg from '@assets/bg/budgetbackground.png';
 import categories from '@lib/categories';
@@ -73,13 +66,20 @@ export default function BudgetScreen() {
     const getTotalIncome = () => (budgetData?.incomes ?? []).reduce((sum, i) => sum + parseFloat(i.amount || '0'), 0);
     const getTotalPlannedExpenses = () => (budgetData?.categories ?? []).reduce((sum, cat) => sum + (cat.subcategories ?? []).reduce((s, sub) => s + parseFloat(sub.amount || '0'), 0), 0);
 
-    const getChartData = () => {
+    const getChartKitData = () => {
         const baseColors = ['#f94144', '#f3722c', '#f9c74f', '#90be6d', '#43aa8b', '#577590', '#6A4C93', '#e5989b'];
         return (budgetData?.categories ?? []).map((cat, index) => {
             const total = cat.subcategories?.reduce((sum, sub) => sum + parseFloat(sub.amount || '0'), 0);
-            return { value: total, svg: { fill: baseColors[index % baseColors.length] }, key: `pie-${cat.name}-${index}` };
+            return {
+                name: cat.name,
+                value: total,
+                color: baseColors[index % baseColors.length],
+                legendFontColor: '#91483c',
+                legendFontSize: 13,
+            };
         }).filter((entry) => entry.value > 0);
     };
+
 
     const getSubcategoryIcon = (subName: string) => {
         const found = categories.find(cat => cat.subcategories.includes(subName));
@@ -154,18 +154,23 @@ export default function BudgetScreen() {
                                     <Text style={styles.chartToggle}>Tap to show chart</Text>
                                 </TouchableOpacity>
                                 {showChart && (
-                                    <View style={styles.chartRow}>
-                                        <View style={styles.pieWrapper}>
-                                            <PieChart
-                                                style={styles.pieChart}
-                                                data={getChartData()}
-                                                valueAccessor={({ item }) => item.value}
-                                                outerRadius={'85%'}
-                                                innerRadius={'40%'}
-                                            />
-                                        </View>
-                                    </View>
+                                    <ChartKitPie
+                                        data={getChartKitData()}
+                                        width={Dimensions.get('window').width - 46} // 23px padding each side
+                                        height={220}
+                                        accessor="value"
+                                        backgroundColor="transparent"
+                                        paddingLeft="15"
+                                        absolute
+                                        chartConfig={{
+                                            color: () => `#000`,
+                                            labelColor: () => '#91483c',
+                                            propsForLabels: { fontSize: 13, fontFamily: 'Fredoka' },
+                                        }}
+                                        style={{ marginTop: 20, borderRadius: 16 }}
+                                    />
                                 )}
+
                             </View>
 
                             <Text style={styles.section}>Income</Text>

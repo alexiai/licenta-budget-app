@@ -1,6 +1,6 @@
 // chart/index.tsx
-import { ScrollView, Text, View, Image, ImageBackground } from 'react-native';
-import { PieChart } from 'react-native-svg-charts';
+import { ScrollView, Text, View, Image, ImageBackground, Dimensions } from 'react-native';
+import { PieChart as ChartKitPie } from 'react-native-chart-kit';
 import { useEffect, useState } from 'react';
 import { auth, db } from '@lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -45,20 +45,21 @@ export default function ChartOverview() {
             setInsights(grouped);
             setTotal(totalSpent);
 
+            const colors = ['#f94144', '#f3722c', '#f9c74f', '#90be6d', '#43aa8b', '#577590', '#6A4C93', '#e5989b'];
+
             const pie = categories.map((cat, i) => {
                 const sum = Object.values(grouped[cat.label] || {})
                     .flat()
                     .reduce((acc: number, e: any) => acc + Number(e.amount), 0);
 
                 return {
-                    key: i,
-                    amount: sum,
-                    svg: { fill: [
-                            '#f94144', '#f3722c', '#f9c74f', '#90be6d', '#43aa8b', '#577590', '#6A4C93', '#e5989b'
-                        ][i % 8] },
-                    label: cat.label,
+                    name: cat.label,
+                    value: sum,
+                    color: colors[i % colors.length],
+                    legendFontColor: '#91483c',
+                    legendFontSize: 13,
                 };
-            });
+            }).filter(entry => entry.value > 0);
 
             setPieData(pie);
         };
@@ -70,7 +71,6 @@ export default function ChartOverview() {
         setExpandedCategories(prev => {
             const newState = { ...prev, [cat]: !prev[cat] };
 
-            // Dacă închidem categoria, închidem și toate subcategoriile ei
             if (!newState[cat]) {
                 setExpandedSubcategories(prevSubs => {
                     const newSubs = { ...prevSubs };
@@ -94,7 +94,6 @@ export default function ChartOverview() {
 
     return (
         <ImageBackground source={bg} resizeMode="cover" style={styles.container}>
-            {/* Partea fixă - titlurile */}
             <View style={styles.topContainer}>
                 <OverviewHeader />
                 <View style={styles.headerContent}>
@@ -103,33 +102,37 @@ export default function ChartOverview() {
                 </View>
             </View>
 
-            {/* Partea scrollabilă - grafic + legenda + cheltuieli */}
             <ScrollView
                 style={styles.scrollableContent}
                 contentContainerStyle={styles.scrollContainer}
             >
-                {/* Graficul și legenda */}
                 <View style={styles.pieSection}>
-                    <View style={styles.pieWrapper}>
-                        <PieChart
-                            style={styles.pieChart}
-                            data={pieData}
-                            valueAccessor={({ item }) => item.amount}
-                            outerRadius={'90%'}
-                            innerRadius={'40%'}
-                        />
-                    </View>
+                    <ChartKitPie
+                        data={pieData}
+                        width={Dimensions.get('window').width - 46}
+                        height={220}
+                        accessor="value"
+                        backgroundColor="transparent"
+                        paddingLeft="15"
+                        absolute
+                        chartConfig={{
+                            color: () => `#000`,
+                            labelColor: () => '#91483c',
+                            propsForLabels: { fontSize: 13, fontFamily: 'Fredoka' },
+                        }}
+                        style={{ marginTop: 20, borderRadius: 16 }}
+                    />
 
                     <View style={styles.legendBox}>
                         {pieData
-                            .sort((a, b) => b.amount - a.amount)
+                            .sort((a, b) => b.value - a.value)
                             .map((item, i) => {
-                                const percent = total > 0 ? ((item.amount / total) * 100).toFixed(0) : 0;
+                                const percent = total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
                                 return (
-                                    <View key={item.label} style={styles.legendItem}>
-                                        <View style={[styles.colorDot, { backgroundColor: item.svg.fill }]} />
+                                    <View key={item.name} style={styles.legendItem}>
+                                        <View style={[styles.colorDot, { backgroundColor: item.color }]} />
                                         <Text style={styles.legendText}>
-                                            {item.label}:<Text style={styles.legendPercent}> {percent}%</Text>
+                                            {item.name}:<Text style={styles.legendPercent}> {percent}%</Text>
                                         </Text>
                                     </View>
                                 );
@@ -137,7 +140,6 @@ export default function ChartOverview() {
                     </View>
                 </View>
 
-                {/* Lista de cheltuieli */}
                 {Object.entries(insights).map(([cat, subObj]: any) => (
                     <View key={cat} style={styles.detailsBox}>
                         <Text onPress={() => toggleCategory(cat)} style={styles.insightTitle}>
