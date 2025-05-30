@@ -16,7 +16,7 @@ import  categories from '../../../lib/categories';
 import { addDoc, collection } from 'firebase/firestore';
 import { auth, db } from '../../../lib/firebase';
 import { romanianToEnglish } from '../../../lib/translationDictionary';
-import { findCategoryByProduct } from '../../../lib/productAssociations';
+import { findCategoryByProduct } from '../../../lib/productAssociation';
 
 interface ChatMessage {
     id: string;
