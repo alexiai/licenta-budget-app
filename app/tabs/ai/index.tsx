@@ -487,20 +487,17 @@ export default function AiScreen(): JSX.Element {
                 replies.push({
                     text: option.text,
                     action: () => {
-                        setCurrentParsing(prev => ({ ...prev, date: option.date }));
+                        const updatedParsing = { ...parsed, date: option.date };
+                        setCurrentParsing(updatedParsing);
                         setQuickReplies([]);
                         setAwaitingInput(null);
 
-                        // Check if we have enough info to save
-                        if (currentParsing?.amount && currentParsing?.category && currentParsing?.subcategory) {
-                            saveExpense({ ...currentParsing, date: option.date });
-                        } else if (!currentParsing?.category) {
-                            generateFollowUpQuestions({ ...currentParsing, date: option.date, amount: parsed.amount!, confidence: 0 });
-                        } else if (!currentParsing?.subcategory) {
-                            const categoryData = categories.find(c => c.label === currentParsing.category);
-                            if (categoryData) {
-                                askForSubcategory(currentParsing.category, categoryData.subcategories);
-                            }
+                        // Check if we have enough info to save now
+                        if (updatedParsing.amount && updatedParsing.category && updatedParsing.subcategory) {
+                            saveExpense(updatedParsing);
+                        } else {
+                            // Continue with other missing fields
+                            generateFollowUpQuestions(updatedParsing);
                         }
                     }
                 });
@@ -515,7 +512,8 @@ export default function AiScreen(): JSX.Element {
                 replies.push({
                     text: cat.label,
                     action: () => {
-                        setCurrentParsing(prev => ({ ...prev, category: cat.label }));
+                        const updatedParsing = { ...parsed, category: cat.label };
+                        setCurrentParsing(updatedParsing);
                         askForSubcategory(cat.label, cat.subcategories);
                     }
                 });
@@ -548,15 +546,17 @@ export default function AiScreen(): JSX.Element {
         const replies: QuickReply[] = subcategories.slice(0, 4).map(sub => ({
             text: sub,
             action: () => {
-                setCurrentParsing(prev => ({ ...prev, subcategory: sub }));
+                const updatedParsing = { ...currentParsing, category, subcategory: sub };
+                setCurrentParsing(updatedParsing);
                 setQuickReplies([]);
                 setAwaitingInput(null);
 
-                if (currentParsing?.amount) {
-                    saveExpense({ ...currentParsing, category, subcategory: sub });
+                // Check if we have all required info now
+                if (updatedParsing.amount && updatedParsing.category && updatedParsing.subcategory && updatedParsing.date) {
+                    saveExpense(updatedParsing);
                 } else {
-                    addMessage('Perfect! Acum, cât ai cheltuit?', false);
-                    setAwaitingInput('amount');
+                    // Continue asking for missing info
+                    generateFollowUpQuestions(updatedParsing);
                 }
             }
         }));
@@ -566,15 +566,17 @@ export default function AiScreen(): JSX.Element {
             replies.push({
                 text: 'General',
                 action: () => {
-                    setCurrentParsing(prev => ({ ...prev, subcategory: 'General' }));
+                    const updatedParsing = { ...currentParsing, category, subcategory: 'General' };
+                    setCurrentParsing(updatedParsing);
                     setQuickReplies([]);
                     setAwaitingInput(null);
 
-                    if (currentParsing?.amount) {
-                        saveExpense({ ...currentParsing, category, subcategory: 'General' });
+                    // Check if we have all required info now
+                    if (updatedParsing.amount && updatedParsing.category && updatedParsing.subcategory && updatedParsing.date) {
+                        saveExpense(updatedParsing);
                     } else {
-                        addMessage('Perfect! Acum, cât ai cheltuit?', false);
-                        setAwaitingInput('amount');
+                        // Continue asking for missing info
+                        generateFollowUpQuestions(updatedParsing);
                     }
                 }
             });
@@ -760,13 +762,15 @@ export default function AiScreen(): JSX.Element {
                 const parsed = await parseExpenseFromText(textToSend);
                 setCurrentParsing(parsed);
 
-                if (parsed.confidence > 50 && parsed.amount && parsed.category) {
-                    // High confidence, save directly
+                // Check if we have all required information
+                if (parsed.amount && parsed.category && parsed.subcategory && parsed.date) {
+                    // We have everything, save directly
                     saveExpense(parsed);
                 } else {
-                    // Need more info
+                    // Ask for missing information
                     if (!generateFollowUpQuestions(parsed)) {
                         addMessage('Nu am putut înțelege cheltuiala. Poți să reformulezi? De exemplu: "Am cheltuit 50 lei pe cafea azi"', false);
+                        speakText('Nu am putut înțelege cheltuiala. Poți să reformulezi?');
                     }
                 }
             }
