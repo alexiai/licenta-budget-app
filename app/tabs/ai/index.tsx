@@ -1,5 +1,16 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import {View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, Platform,} from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    TextInput,
+    ScrollView,
+    Alert,
+    ActivityIndicator,
+    Platform,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import { categories } from '../../../lib/categories';
@@ -46,7 +57,7 @@ export default function AiScreen(): JSX.Element {
     const [awaitingInput, setAwaitingInput] = useState<string | null>(null);
     const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
 
-    const scrollViewRef = useRef<ScrollView | null>(null);
+    const scrollViewRef = useRef<ScrollView>(null);
 
     const [recognition, setRecognition] = useState<any>(null);
 
@@ -153,22 +164,29 @@ export default function AiScreen(): JSX.Element {
     };
 
     const translateText = async (text: string, fromLang = 'ro', toLang = 'en'): Promise<string> => {
-        try {
-            const response = await fetch('https://libretranslate.de/translate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    q: text,
-                    source: fromLang,
-                    target: toLang,
-                    format: 'text',
-                }),
-            });
+        // Import the comprehensive translation dictionary
+        const { romanianToEnglish } = await import('../../../lib/translationDictionary');
 
-            const data = await response.json();
-            return data.translatedText || text;
+        if (fromLang === toLang) return text;
+
+        try {
+            if (fromLang === 'ro' && toLang === 'en') {
+                let translatedText = text.toLowerCase();
+
+                // Sort by length (longest first) to avoid partial replacements
+                const sortedEntries = Object.entries(romanianToEnglish)
+                    .sort(([a], [b]) => b.length - a.length);
+
+                // Replace Romanian words with English equivalents
+                sortedEntries.forEach(([ro, en]) => {
+                    const regex = new RegExp(`\\b${ro}\\b`, 'gi');
+                    translatedText = translatedText.replace(regex, en);
+                });
+
+                return translatedText;
+            }
+
+            return text; // Return original if no translation available
         } catch (error) {
             console.log('Translation error:', error);
             return text; // Fallback to original text
@@ -449,7 +467,7 @@ export default function AiScreen(): JSX.Element {
                     }
                 } else {
                     addMessage('Mulțumesc! Pentru ce categorie a fost această cheltuială?', false);
-                    saveExpense({ ...currentParsing, amount });
+                    generateFollowUpQuestions({ ...currentParsing, amount });
                 }
             } else {
                 addMessage('Nu am putut identifica suma. Te rog să specifici un număr (ex: 50, 25.5)', false);
@@ -502,7 +520,6 @@ export default function AiScreen(): JSX.Element {
                 } else {
                     // Show subcategory options as fallback
                     addMessage('Nu am recunoscut subcategoria. Te rog să alegi din opțiunile de mai jos:', false);
-                    if (!currentParsing?.category) return;
                     askForSubcategory(currentParsing.category!, currentCategory.subcategories);
                     speakText('Nu am recunoscut subcategoria. Te rog să alegi din opțiunile afișate.');
                 }
