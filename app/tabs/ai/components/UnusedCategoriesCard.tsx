@@ -1,15 +1,14 @@
-
 import React from 'react';
 import {
     View,
     Text,
     StyleSheet,
-    TouchableOpacity,
     ScrollView,
+    Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SpendingAnalysis } from './SmartAdviceSection';
-
+import categoryImg from '@assets/decor/aiCategories.png';
 
 interface UnusedCategoriesCardProps {
     analysis?: SpendingAnalysis;
@@ -20,87 +19,78 @@ interface CategoryInsight {
     icon: string;
     insight: string;
     emoji: string;
-    actionText: string;
     type: 'good' | 'neutral' | 'reminder';
 }
 
 export default function UnusedCategoriesCard({ analysis }: UnusedCategoriesCardProps): JSX.Element {
     const getCategoryInsights = (): CategoryInsight[] => {
         const insights: CategoryInsight[] = [];
-
         if (!analysis) return insights;
 
         const { unusedCategories = [], categoryBreakdown = {} } = analysis;
 
-        // Category mappings with bunny-themed insights
         const categoryData = {
             'Health': {
                 icon: 'medical',
                 good: 'Amazing! No health expenses this month! Your bunny is proud of your healthy lifestyle! 🐰💚',
                 reminder: 'No health expenses tracked. Don\'t forget routine checkups - even bunnies need their carrot vitamins! 🐰🥕',
-                emoji: '🐰🏥'
+                emoji: '🐰🏥',
             },
             'Entertainment': {
                 icon: 'game-controller',
                 good: 'Wow! No entertainment spending! You\'re focusing like a determined bunny! 🐰🎯',
                 reminder: 'No fun expenses? Remember to treat yourself sometimes - all work and no play makes bunny sad! 🐰😢',
-                emoji: '🐰🎮'
+                emoji: '🐰🎮',
             },
             'Lifestyle': {
                 icon: 'shirt',
                 good: 'No lifestyle purchases! Your bunny appreciates your minimalist approach! 🐰✨',
                 reminder: 'No lifestyle spending tracked. Taking care of yourself is important too! 🐰💅',
-                emoji: '🐰👗'
+                emoji: '🐰👗',
             },
             'Transport': {
                 icon: 'car',
                 good: 'No transport costs! Walking bunny style is eco-friendly and healthy! 🐰🌱',
                 reminder: 'No transport expenses? Make sure you\'re tracking all your travel costs! 🐰🚌',
-                emoji: '🐰🚗'
+                emoji: '🐰🚗',
             },
             'Housing': {
                 icon: 'home',
                 good: 'No housing costs this month! Living rent-free like a wild bunny! 🐰🏠',
                 reminder: 'No housing expenses tracked. Don\'t forget utilities and rent! 🐰🏡',
-                emoji: '🐰🏠'
+                emoji: '🐰🏠',
             },
             'Food & Drinks': {
                 icon: 'restaurant',
                 good: 'No food expenses? Are you living on carrots and water like a true bunny? 🐰🥕',
                 reminder: 'No food costs tracked? That\'s unusual - even bunnies need their meals! 🐰🍽️',
-                emoji: '🐰🍽️'
+                emoji: '🐰🍽️',
             },
             'Savings': {
                 icon: 'wallet',
                 good: 'Great savings momentum from last month! Your carrot fund is growing! 🐰💰',
                 reminder: 'No savings this month? Every carrot saved counts for the future! 🐰🥕',
-                emoji: '🐰💰'
+                emoji: '🐰💰',
             },
             'Other': {
                 icon: 'ellipsis-horizontal',
                 good: 'No miscellaneous expenses! Your bunny loves organized spending! 🐰📋',
                 reminder: 'No other expenses tracked. Sometimes unexpected costs hop in! 🐰❓',
-                emoji: '🐰📦'
-            }
+                emoji: '🐰📦',
+            },
         };
 
-        // Analyze unused categories
         unusedCategories.forEach(category => {
             const data = categoryData[category as keyof typeof categoryData];
             if (data) {
-                // Determine if this is good or needs attention based on category type
-                const isEssentialCategory = ['Food & Drinks', 'Housing'].includes(category);
-                const isHealthCategory = category === 'Health';
-
                 let type: 'good' | 'neutral' | 'reminder' = 'neutral';
                 let insight = '';
 
-                if (isEssentialCategory) {
+                if (['Food & Drinks', 'Housing'].includes(category)) {
                     type = 'reminder';
                     insight = data.reminder;
-                } else if (isHealthCategory) {
-                    // Check if it's been more than 2 months without health expenses
-                    type = 'good'; // Assume good for now
+                } else if (category === 'Health') {
+                    type = 'good';
                     insight = data.good;
                 } else {
                     type = 'good';
@@ -112,13 +102,11 @@ export default function UnusedCategoriesCard({ analysis }: UnusedCategoriesCardP
                     icon: data.icon,
                     insight,
                     emoji: data.emoji,
-                    actionText: type === 'reminder' ? 'Track expenses' : 'Keep it up!',
-                    type
+                    type,
                 });
             }
         });
 
-        // Also analyze very low spending categories
         Object.entries(categoryBreakdown).forEach(([category, amount]) => {
             if (amount < 50 && !unusedCategories.includes(category)) {
                 const data = categoryData[category as keyof typeof categoryData];
@@ -128,44 +116,43 @@ export default function UnusedCategoriesCard({ analysis }: UnusedCategoriesCardP
                         icon: data.icon,
                         insight: `Only ${amount.toFixed(0)} RON on ${category} this month! Your bunny is impressed by your restraint! 🐰👍`,
                         emoji: data.emoji,
-                        actionText: 'Great control!',
-                        type: 'good'
+                        type: 'good',
                     });
                 }
             }
         });
 
-        return insights.slice(0, 6); // Limit to 6 insights
+        return insights.slice(0, 6);
     };
 
     const insights = getCategoryInsights();
 
     const getInsightColor = (type: string) => {
         switch (type) {
-            case 'good': return '#4CAF50';
-            case 'reminder': return '#FF9800';
-            case 'neutral': return '#2196F3';
-            default: return '#91483C';
+            case 'good': return '#FFB84C';
+            case 'reminder': return '#FF7043';
+            case 'neutral': return '#FDD835';
+            default: return '#CCC';
         }
     };
 
     const getInsightIcon = (type: string) => {
         switch (type) {
-            case 'good': return 'checkmark-circle';
-            case 'reminder': return 'warning';
+            case 'good': return 'happy';
+            case 'reminder': return 'alert-circle';
             case 'neutral': return 'information-circle';
-            default: return 'help-circle';
+            default: return 'help';
         }
     };
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-            <View style={styles.header}>
-                <Text style={styles.headerEmoji}>🐰📊</Text>
-                <Text style={styles.headerTitle}>Category Analysis</Text>
-                <Text style={styles.headerSubtitle}>
-                    Your spending patterns with bunny wisdom
-                </Text>
+            <View style={styles.headerRow}>
+                <Image source={categoryImg} style={styles.image} resizeMode="contain" />
+                <View style={styles.headerText}>
+                    <Text style={styles.headerTitle}>Category Analysis</Text>
+                    <Text style={styles.headerSubtitle}>Your spending patterns with bunny wisdom</Text>
+                </View>
             </View>
 
             {insights.length === 0 ? (
@@ -180,13 +167,10 @@ export default function UnusedCategoriesCard({ analysis }: UnusedCategoriesCardP
                     {insights.map((insight, index) => (
                         <View key={`${insight.category}-${index}`} style={styles.insightCard}>
                             <View style={styles.insightHeader}>
-                                <View style={[
-                                    styles.categoryIcon,
-                                    { backgroundColor: getInsightColor(insight.type) + '20' }
-                                ]}>
+                                <View style={[styles.categoryIcon, { backgroundColor: getInsightColor(insight.type) + '33' }]}>
                                     <Ionicons
                                         name={insight.icon as any}
-                                        size={24}
+                                        size={22}
                                         color={getInsightColor(insight.type)}
                                     />
                                 </View>
@@ -198,12 +182,9 @@ export default function UnusedCategoriesCard({ analysis }: UnusedCategoriesCardP
                                             size={16}
                                             color={getInsightColor(insight.type)}
                                         />
-                                        <Text style={[
-                                            styles.statusText,
-                                            { color: getInsightColor(insight.type) }
-                                        ]}>
-                                            {insight.type === 'good' ? 'Great job!' :
-                                                insight.type === 'reminder' ? 'Check this' : 'Neutral'}
+                                        <Text style={[styles.statusText, { color: getInsightColor(insight.type) }]}>
+                                            {insight.type === 'good' ? 'Awesome!' :
+                                                insight.type === 'reminder' ? 'Heads up!' : 'Info'}
                                         </Text>
                                     </View>
                                 </View>
@@ -211,15 +192,6 @@ export default function UnusedCategoriesCard({ analysis }: UnusedCategoriesCardP
                             </View>
 
                             <Text style={styles.insightText}>{insight.insight}</Text>
-
-                            <TouchableOpacity
-                                style={[
-                                    styles.actionButton,
-                                    { backgroundColor: getInsightColor(insight.type) }
-                                ]}
-                            >
-                                <Text style={styles.actionButtonText}>{insight.actionText}</Text>
-                            </TouchableOpacity>
                         </View>
                     ))}
                 </View>
@@ -231,8 +203,8 @@ export default function UnusedCategoriesCard({ analysis }: UnusedCategoriesCardP
                     You're actively spending in {Object.keys(analysis.categoryBreakdown).length} out of 8 categories.
                     {analysis.unusedCategories.length > 0
                         ? ` ${analysis.unusedCategories.length} categories haven't been used this month.`
-                        : ' All categories are active!'
-                    } Keep tracking to get better insights! 🥕
+                        : ' All categories are active!'}
+                    Keep tracking to get better insights! 🥕
                 </Text>
             </View>
         </ScrollView>
@@ -243,24 +215,32 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
+    headerRow: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 24,
+        paddingTop: 20,
+        paddingBottom: 16,
+        paddingRight: 20,
     },
-    headerEmoji: {
-        fontSize: 48,
-        marginBottom: 8,
+    image: {
+        width: 200,
+        height: 200,
+        marginRight: 0,
+    },
+    headerText: {
+        flex: 1,
     },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: 'bold',
         color: '#91483C',
+        fontFamily: 'Fredoka',
         marginBottom: 4,
     },
     headerSubtitle: {
         fontSize: 14,
         color: '#666',
-        textAlign: 'center',
+        fontFamily: 'Fredoka',
     },
     noInsightsContainer: {
         alignItems: 'center',
@@ -279,28 +259,31 @@ const styles = StyleSheet.create({
     insightsContainer: {
         gap: 16,
         marginBottom: 20,
+        paddingHorizontal: 16,
     },
     insightCard: {
-        backgroundColor: 'white',
-        borderRadius: 16,
+        backgroundColor: '#FFF6EE',
+        borderRadius: 18,
         padding: 20,
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: '#f0f0f0',
+        borderWidth: 2,
+        borderColor: '#FFD9B5',
+        shadowColor: '#FFB84C',
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 4 },
     },
     insightHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 12,
     },
     categoryIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: 42,
+        height: 42,
+        borderRadius: 21,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 16,
+        marginRight: 12,
     },
     categoryInfo: {
         flex: 1,
@@ -309,53 +292,47 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: '#91483C',
-        marginBottom: 4,
+        fontFamily: 'Fredoka',
     },
     statusContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        marginTop: 2,
     },
     statusText: {
         marginLeft: 4,
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '600',
+        fontFamily: 'Fredoka',
     },
     insightEmoji: {
         fontSize: 24,
     },
     insightText: {
-        fontSize: 16,
+        fontSize: 15,
         color: '#333',
         lineHeight: 22,
-        marginBottom: 16,
-    },
-    actionButton: {
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 20,
-        alignItems: 'center',
-    },
-    actionButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
+        fontFamily: 'Fredoka',
     },
     summaryCard: {
-        backgroundColor: '#fff0e8',
-        borderRadius: 16,
+        backgroundColor: '#FFF0E5',
+        borderRadius: 20,
         padding: 20,
+        margin: 16,
+        borderColor: '#FFB84C',
         borderWidth: 2,
-        borderColor: '#91483C',
     },
     summaryTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#91483C',
+        fontFamily: 'Fredoka',
         marginBottom: 8,
     },
     summaryText: {
-        fontSize: 16,
-        color: '#333',
+        fontSize: 15,
+        color: '#444',
         lineHeight: 22,
+        fontFamily: 'Fredoka',
     },
 });

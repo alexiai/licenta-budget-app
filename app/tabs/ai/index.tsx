@@ -1,19 +1,14 @@
-
+import { Image } from 'react-native';
 import React, { useState, useEffect } from 'react';
-import {
-    View,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    Text,
-    ActivityIndicator,
-    ImageBackground,
-} from 'react-native';
+import {View, StyleSheet, ScrollView, TouchableOpacity, Text, ActivityIndicator, ImageBackground,} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SmartAdviceSection from './components/SmartAdviceSection';
 import ChatInterface from './components/ChatInterface';
 import { auth } from '../../../lib/firebase';
-import bg from '@assets/bg/profilebackrground.png';
+import bg from '@assets/bg/AIback.png';
+import carrotIcon from '@assets/decor/carrot-icon.png';
+import bunnyHead from '@assets/icons/bunnyhead.png';
+import calendarIcon from '@assets/icons/calendarMedium.png'; // imaginea în loc de emoji
 
 type TabType = 'tips' | 'categories' | 'stats' | 'quests';
 
@@ -32,7 +27,6 @@ export default function AiScreen(): JSX.Element {
         return (
             <ImageBackground source={bg} style={styles.container} resizeMode="cover">
                 <View style={styles.center}>
-                    <Text style={styles.bunnyFace}>🐰</Text>
                     <Text style={styles.loginText}>Please log in to meet your Bunny Assistant!</Text>
                 </View>
             </ImageBackground>
@@ -43,7 +37,6 @@ export default function AiScreen(): JSX.Element {
         return (
             <ImageBackground source={bg} style={styles.container} resizeMode="cover">
                 <View style={styles.center}>
-                    <Text style={styles.loadingBunny}>🐰</Text>
                     <ActivityIndicator size="large" color="#91483C" />
                     <Text style={styles.loadingText}>Bunny is preparing your insights...</Text>
                 </View>
@@ -61,7 +54,11 @@ export default function AiScreen(): JSX.Element {
                     >
                         <Ionicons name="arrow-back" size={24} color="#91483C" />
                     </TouchableOpacity>
-                    <Text style={styles.chatTitle}>🐰 Chat with Bunny</Text>
+                    <View style={styles.chatTitleRow}>
+                        <Image source={calendarIcon} style={styles.calendarIcon} />
+                        <Text style={styles.chatTitle}>Chat with Bunny</Text>
+                    </View>
+
                 </View>
                 <ChatInterface />
             </ImageBackground>
@@ -69,19 +66,18 @@ export default function AiScreen(): JSX.Element {
     }
 
     const tabs = [
-        { id: 'tips' as TabType, label: 'Tips', icon: '💡', emoji: '🥕' },
-        { id: 'categories' as TabType, label: 'Categories', icon: '📊', emoji: '🌱' },
-        { id: 'stats' as TabType, label: 'Stats', icon: '📈', emoji: '⭐' },
-        { id: 'quests' as TabType, label: 'Quests', icon: '🎯', emoji: '🏆' },
+        { id: 'tips' as TabType, label: 'Tips' },
+        { id: 'categories' as TabType, label: 'Categories' },
+        { id: 'stats' as TabType, label: 'Stats' },
+        { id: 'quests' as TabType, label: 'Quests' },
     ];
+
 
     return (
         <ImageBackground source={bg} style={styles.container} resizeMode="cover">
             {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.bunnyGreeting}>🐰</Text>
                 <Text style={styles.title}>Smart Bunny Assistant</Text>
-                <Text style={styles.subtitle}>Your personal financial coach</Text>
             </View>
 
             {/* Compact Tab Selector */}
@@ -95,12 +91,14 @@ export default function AiScreen(): JSX.Element {
                         ]}
                         onPress={() => setActiveTab(tab.id)}
                     >
-                        <Text style={[
-                            styles.tabEmoji,
-                            activeTab === tab.id && styles.tabEmojiActive
-                        ]}>
-                            {activeTab === tab.id ? tab.emoji : tab.icon}
-                        </Text>
+                        <Image
+                            source={carrotIcon}
+                            style={[
+                                styles.tabIcon,
+                                activeTab === tab.id && styles.tabIconActive
+                            ]}
+                        />
+
                         <Text style={[
                             styles.tabLabel,
                             activeTab === tab.id && styles.tabLabelActive
@@ -131,13 +129,13 @@ export default function AiScreen(): JSX.Element {
             </ScrollView>
 
             {/* Floating Chat Button */}
-            <TouchableOpacity
-                style={styles.chatButton}
-                onPress={() => setShowChat(true)}
-            >
-                <Text style={styles.chatButtonEmoji}>🐰</Text>
-                <Text style={styles.chatButtonText}>Chat</Text>
-            </TouchableOpacity>
+            <View style={styles.chatWrapper}>
+                <TouchableOpacity style={styles.chatButton} onPress={() => setShowChat(true)}>
+                    <Image source={bunnyHead} style={styles.bunnyIcon} />
+                    <Text style={styles.chatButtonText}>Chat</Text>
+                </TouchableOpacity>
+            </View>
+
         </ImageBackground>
     );
 }
@@ -198,7 +196,7 @@ const styles = StyleSheet.create({
         transform: [{ rotate: '-5deg' }],
     },
     title: {
-        fontSize: 26,
+        fontSize: 30,
         fontWeight: 'bold',
         color: '#91483C',
         marginBottom: 4,
@@ -315,8 +313,8 @@ const styles = StyleSheet.create({
     chatHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: 60,
+        paddingHorizontal: 10,
+        paddingTop: 15,
         paddingBottom: 16,
         backgroundColor: 'rgba(255, 255, 255, 0.9)',
     },
@@ -327,9 +325,71 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF2D8',
     },
     chatTitle: {
-        fontSize: 20,
+        fontSize: 28,
         fontWeight: 'bold',
         color: '#91483C',
         fontFamily: 'Fredoka',
+        marginTop:20,
     },
+    tabIcon: {
+        width: 24,
+        height: 24,
+        marginBottom: 4,
+        opacity: 0.5,
+    },
+    tabIconActive: {
+        opacity: 1,
+        transform: [{ scale: 1.1 }],
+    },
+    chatWrapper: {
+        position: 'absolute',
+        bottom: 30,
+        right: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    chatButton: {
+        backgroundColor: '#F97850',
+        borderRadius: 26,
+        paddingVertical: 12,
+        paddingHorizontal: 26,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        position: 'relative',
+    },
+
+    bunnyIcon: {
+        position: 'absolute',
+        top: -15,
+        left: -0.5,
+        width: 60,
+        height: 60,
+        resizeMode: 'contain',
+    },
+
+    chatButtonText: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
+        fontFamily: 'Fredoka',
+        marginLeft: 28, // să lase loc pentru iepure
+    },
+    chatTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    calendarIcon: {
+        width: 60,
+        height: 60,
+        resizeMode: 'contain',
+    },
+
+
 });

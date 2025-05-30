@@ -1,13 +1,15 @@
+// SmartTipsCard.tsx
 import React from 'react';
 import {
     View,
     Text,
     StyleSheet,
-    TouchableOpacity,
     ScrollView,
+    Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SpendingAnalysis, ExpenseData } from './SmartAdviceSection';
+import { SpendingAnalysis } from './SmartAdviceSection';
+import tipsImg from '@assets/decor/aiTips.png';
 
 interface SmartTipsCardProps {
     analysis?: SpendingAnalysis;
@@ -27,10 +29,8 @@ interface SmartTip {
 export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Element {
     const generateSmartTips = (): SmartTip[] => {
         const tips: SmartTip[] = [];
-
         if (!analysis) return tips;
 
-        // Analyze spending patterns and generate contextual tips
         const {
             topCategories = [],
             totalThisMonth = 0,
@@ -39,7 +39,6 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
             categoryBreakdown = {}
         } = analysis;
 
-        // High spending category tips
         topCategories.forEach((categoryData, index) => {
             if (categoryData.percentage > 30 && index === 0) {
                 const potentialSavings = Math.round(categoryData.amount * 0.1);
@@ -56,7 +55,6 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
             }
         });
 
-        // Coffee/drinks optimization
         const coffeeSpending = subcategoryBreakdown['Coffee'] || 0;
         const drinksSpending = subcategoryBreakdown['Drinks'] || 0;
         const totalBeverage = coffeeSpending + drinksSpending;
@@ -75,7 +73,6 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
             });
         }
 
-        // Month-over-month comparison
         const spendingIncrease = totalThisMonth - totalLastMonth;
         if (spendingIncrease > 200) {
             tips.push({
@@ -97,10 +94,8 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
             });
         }
 
-        // Food & Drinks optimization
-        const restaurantSpending = Number((subcategoryBreakdown && subcategoryBreakdown['Restaurant']) || 0);
-        const groceriesSpending = Number((subcategoryBreakdown && subcategoryBreakdown['Groceries']) || 0);
-        const totalFoodSpending = Number((categoryBreakdown && categoryBreakdown['Food & Drinks']) || 0);
+        const restaurantSpending = Number(subcategoryBreakdown['Restaurant'] || 0);
+        const groceriesSpending = Number(subcategoryBreakdown['Groceries'] || 0);
 
         if (restaurantSpending > groceriesSpending && restaurantSpending > 150) {
             tips.push({
@@ -115,8 +110,7 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
             });
         }
 
-        // Transport optimization
-        const transportSpending = Number((categoryBreakdown && categoryBreakdown['Transport']) || 0);
+        const transportSpending = Number(categoryBreakdown['Transport'] || 0);
         if (transportSpending > 300) {
             tips.push({
                 id: 'transport-optimization',
@@ -130,8 +124,7 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
             });
         }
 
-        // Entertainment spending check
-        const entertainmentSpending = Number((categoryBreakdown && categoryBreakdown['Entertainment']) || 0);
+        const entertainmentSpending = Number(categoryBreakdown['Entertainment'] || 0);
         if (totalThisMonth > 0 && entertainmentSpending > totalThisMonth * 0.15) {
             tips.push({
                 id: 'entertainment-budget',
@@ -145,8 +138,7 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
             });
         }
 
-        // Savings encouragement
-        const savingsSpending = Number(analysis.categoryBreakdown['Savings'] || 0);
+        const savingsSpending = Number(categoryBreakdown['Savings'] || 0);
         const savingsPercentage = totalThisMonth > 0 ? (savingsSpending / totalThisMonth) * 100 : 0;
 
         if (savingsPercentage < 10) {
@@ -172,7 +164,6 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
             });
         }
 
-        // Daily spending pattern
         const averageDailySpending = analysis.averageDailySpending || 0;
         if (averageDailySpending > 100) {
             tips.push({
@@ -185,7 +176,6 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
             });
         }
 
-        // Sort tips by priority
         const priorityOrder = { high: 0, medium: 1, low: 2 };
         return tips.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]).slice(0, 6);
     };
@@ -194,21 +184,23 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
 
     const getPriorityColor = (priority: string) => {
         switch (priority) {
-            case 'high': return '#FF6B6B';
-            case 'medium': return '#4ECDC4';
-            case 'low': return '#45B7D1';
-            default: return '#91483C';
+            case 'high': return '#FF8C42';
+            case 'medium': return '#FFA94D';
+            case 'low': return '#FFD6A5';
+            default: return '#FFE0B2';
         }
     };
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-            <View style={styles.header}>
-                <Text style={styles.headerEmoji}>🐰🧠</Text>
-                <Text style={styles.headerTitle}>Smart Bunny Tips</Text>
-                <Text style={styles.headerSubtitle}>
-                    Personalized advice based on your spending patterns
-                </Text>
+            <View style={styles.headerRow}>
+                <Image source={tipsImg} style={styles.image} resizeMode="contain" />
+                <View style={styles.headerText}>
+                    <Text style={styles.headerTitle}>Smart Bunny Tips</Text>
+                    <Text style={styles.headerSubtitle}>
+                        Personalized advice based on your spending patterns
+                    </Text>
+                </View>
             </View>
 
             {tips.length === 0 ? (
@@ -221,25 +213,16 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
                 </View>
             ) : (
                 <View style={styles.tipsContainer}>
-                    {tips.map((tip, index) => (
-                        <View key={tip.id} style={styles.tipCard}>
+                    {tips.map((tip) => (
+                        <View key={tip.id} style={[styles.tipCard, { backgroundColor: '#FFF0E0' }]}>
                             <View style={styles.tipHeader}>
-                                <View style={[
-                                    styles.priorityBadge,
-                                    { backgroundColor: getPriorityColor(tip.priority) }
-                                ]}>
-                                    <Ionicons
-                                        name={tip.icon as any}
-                                        size={16}
-                                        color="white"
-                                    />
+                                <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(tip.priority) }]}>
+                                    <Ionicons name={tip.icon as any} size={16} color="white" />
                                 </View>
                                 <Text style={styles.tipEmoji}>{tip.emoji}</Text>
                             </View>
-
                             <Text style={styles.tipTitle}>{tip.title}</Text>
                             <Text style={styles.tipDescription}>{tip.description}</Text>
-
                             {tip.savingsAmount && (
                                 <View style={styles.savingsContainer}>
                                     <Ionicons name="trending-down" size={16} color="#4CAF50" />
@@ -248,10 +231,6 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
                                     </Text>
                                 </View>
                             )}
-
-                            <TouchableOpacity style={styles.actionButton}>
-                                <Text style={styles.actionButtonText}>Got it! 🐰</Text>
-                            </TouchableOpacity>
                         </View>
                     ))}
                 </View>
@@ -261,36 +240,37 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
+    container: { flex: 1 },
+    headerRow: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 24,
+        paddingTop: 20,
+        paddingBottom: 16,
+        paddingRight: 20,
     },
-    headerEmoji: {
-        fontSize: 48,
-        marginBottom: 8,
+    image: {
+        width: 200,
+        height: 200,
+        marginRight: 0,
     },
+    headerText: { flex: 1 },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: 'bold',
-        color: '#91483C',
+        color: '#90483c',
+        fontFamily: 'Fredoka',
         marginBottom: 4,
     },
     headerSubtitle: {
         fontSize: 14,
-        color: '#666',
-        textAlign: 'center',
+        color: '#91483C',
+        fontFamily: 'Fredoka',
     },
     noTipsContainer: {
         alignItems: 'center',
         padding: 40,
     },
-    noTipsEmoji: {
-        fontSize: 48,
-        marginBottom: 16,
-    },
+    noTipsEmoji: { fontSize: 48, marginBottom: 16 },
     noTipsText: {
         fontSize: 16,
         color: '#666',
@@ -299,15 +279,14 @@ const styles = StyleSheet.create({
     },
     tipsContainer: {
         gap: 16,
+        paddingHorizontal: 16,
     },
     tipCard: {
-        backgroundColor: 'white',
-        borderRadius: 16,
+        borderRadius: 20,
         padding: 20,
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: '#f0f0f0',
+        borderWidth: 2,
+        borderColor: '#FFD4A8',
+        elevation: 4,
     },
     tipHeader: {
         flexDirection: 'row',
@@ -322,20 +301,18 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginRight: 12,
     },
-    tipEmoji: {
-        fontSize: 24,
-    },
+    tipEmoji: { fontSize: 24 },
     tipTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#91483C',
+        color: '#FF6B00',
         marginBottom: 8,
     },
     tipDescription: {
         fontSize: 16,
-        color: '#333',
+        color: '#91483C',
         lineHeight: 22,
-        marginBottom: 16,
+        marginBottom: 12,
     },
     savingsContainer: {
         flexDirection: 'row',
@@ -343,24 +320,11 @@ const styles = StyleSheet.create({
         backgroundColor: '#E8F5E8',
         padding: 12,
         borderRadius: 8,
-        marginBottom: 16,
     },
     savingsText: {
         marginLeft: 8,
         fontSize: 14,
         fontWeight: '600',
         color: '#4CAF50',
-    },
-    actionButton: {
-        backgroundColor: '#91483C',
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 20,
-        alignItems: 'center',
-    },
-    actionButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
     },
 });

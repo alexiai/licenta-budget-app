@@ -1,14 +1,14 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     ScrollView,
-    ActivityIndicator,
+    Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SpendingAnalysis } from './SmartAdviceSection';
+import statsImg from '@assets/decor/aiStats.png';
 
 interface WeeklyStatsCardProps {
     analysis?: SpendingAnalysis;
@@ -23,7 +23,7 @@ interface WeeklyData {
 }
 
 export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX.Element {
-    const [loading, setLoading] = useState(false);
+    const [loading] = useState(false);
 
     if (!analysis) {
         return (
@@ -33,10 +33,9 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
         );
     }
 
-    const { weeklyStats, totalThisMonth, averageDailySpending } = analysis;
+    const { weeklyStats, averageDailySpending } = analysis;
 
     const getWeeklyData = (): WeeklyData[] => {
-        // Mock weekly data based on current stats
         const currentWeek = weeklyStats.currentWeek;
         const lastWeek = weeklyStats.lastWeek;
 
@@ -71,23 +70,22 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-            <View style={styles.header}>
-                <Text style={styles.headerEmoji}>🐰📈</Text>
-                <Text style={styles.headerTitle}>Weekly Stats</Text>
-                <Text style={styles.headerSubtitle}>
-                    Your spending trends with bunny insights
-                </Text>
+            <View style={styles.headerRow}>
+                <Image source={statsImg} style={styles.image} resizeMode="contain" />
+                <View style={styles.headerText}>
+                    <Text style={styles.headerTitle}>Weekly Stats</Text>
+                    <Text style={styles.headerSubtitle}>
+                        Your spending trends with bunny insights
+                    </Text>
+                </View>
             </View>
 
-            {/* Current Week Summary */}
             <View style={styles.summaryCard}>
                 <View style={styles.summaryHeader}>
                     <Text style={styles.summaryTitle}>This Week's Performance</Text>
                     <View style={[styles.trendBadge, { backgroundColor: trendColor + '20' }]}>
                         <Ionicons name={trendIcon as any} size={16} color={trendColor} />
-                        <Text style={[styles.trendText, { color: trendColor }]}>
-                            {weeklyStats.trend}
-                        </Text>
+                        <Text style={[styles.trendText, { color: trendColor }]}> {weeklyStats.trend} </Text>
                     </View>
                 </View>
                 <Text style={styles.summaryAmount}>{weeklyStats.currentWeek} RON</Text>
@@ -98,7 +96,6 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
                 </Text>
             </View>
 
-            {/* Weekly Breakdown */}
             <View style={styles.weeklyContainer}>
                 <Text style={styles.sectionTitle}>Weekly Breakdown</Text>
                 {weeklyData.map((week, index) => (
@@ -126,7 +123,6 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
                 ))}
             </View>
 
-            {/* Daily Average */}
             <View style={styles.averageCard}>
                 <Text style={styles.averageTitle}>🥕 Daily Average</Text>
                 <Text style={styles.averageAmount}>{averageDailySpending} RON/day</Text>
@@ -137,12 +133,9 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
                 </Text>
             </View>
 
-            {/* Monthly Projection */}
             <View style={styles.projectionCard}>
                 <Text style={styles.projectionTitle}>🔮 Monthly Projection</Text>
-                <Text style={styles.projectionAmount}>
-                    {Math.round(averageDailySpending * 30)} RON
-                </Text>
+                <Text style={styles.projectionAmount}>{Math.round(averageDailySpending * 30)} RON</Text>
                 <Text style={styles.projectionNote}>
                     Based on your current daily average, this is your projected monthly spending.
                 </Text>
@@ -155,43 +148,52 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
+    headerRow: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 24,
+        paddingTop: 20,
+        paddingBottom: 16,
+        paddingRight: 20,
     },
-    headerEmoji: {
-        fontSize: 48,
-        marginBottom: 8,
+    image: {
+        width: 200,
+        height: 200,
+    },
+    headerText: {
+        flex: 1,
     },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: 'bold',
         color: '#91483C',
+        fontFamily: 'Fredoka',
         marginBottom: 4,
     },
     headerSubtitle: {
         fontSize: 14,
         color: '#666',
-        textAlign: 'center',
+        fontFamily: 'Fredoka',
     },
     errorText: {
         fontSize: 16,
         color: '#666',
         textAlign: 'center',
         marginTop: 50,
+        fontFamily: 'Fredoka',
     },
     summaryCard: {
-        backgroundColor: 'white',
-        borderRadius: 16,
+        backgroundColor: '#FFE8CC',
+        borderRadius: 20,
         padding: 20,
         marginBottom: 20,
-        shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 8,
-        elevation: 3,
         borderWidth: 1,
-        borderColor: '#f0f0f0',
+        borderColor: '#F5CBA7',
+        shadowColor: 'rgba(255,145,0,0.2)',
+        shadowOpacity: 0.12,
+        shadowOffset: { width: 0, height: 4 },
+        shadowRadius: 8,
+        elevation: 4,
+        marginHorizontal: 16,
     },
     summaryHeader: {
         flexDirection: 'row',
@@ -203,6 +205,7 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: '#91483C',
+        fontFamily: 'Fredoka',
     },
     trendBadge: {
         flexDirection: 'row',
@@ -216,36 +219,39 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
         textTransform: 'capitalize',
+        fontFamily: 'Fredoka',
     },
     summaryAmount: {
         fontSize: 32,
         fontWeight: 'bold',
         color: '#91483C',
         marginBottom: 8,
+        fontFamily: 'Fredoka',
     },
     summaryNote: {
         fontSize: 14,
         color: '#666',
         lineHeight: 20,
+        fontFamily: 'Fredoka',
     },
     weeklyContainer: {
         marginBottom: 20,
+        paddingHorizontal: 16,
     },
     sectionTitle: {
         fontSize: 20,
         fontWeight: 'bold',
         color: '#91483C',
         marginBottom: 16,
+        fontFamily: 'Fredoka',
     },
     weekCard: {
-        backgroundColor: 'white',
-        borderRadius: 12,
+        backgroundColor: '#FFF0D9',
+        borderRadius: 16,
         padding: 16,
         marginBottom: 12,
-        shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowOffset: { width: 0, height: 1 },
-        shadowRadius: 4,
+        borderWidth: 1,
+        borderColor: '#F5CBA7',
         elevation: 2,
     },
     weekHeader: {
@@ -257,11 +263,13 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: '#333',
+        fontFamily: 'Fredoka',
     },
     weekDates: {
         fontSize: 14,
         color: '#666',
         marginTop: 2,
+        fontFamily: 'Fredoka',
     },
     weekAmount: {
         alignItems: 'flex-end',
@@ -270,6 +278,7 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: '#91483C',
+        fontFamily: 'Fredoka',
     },
     trendIndicator: {
         width: 24,
@@ -280,52 +289,61 @@ const styles = StyleSheet.create({
         marginTop: 4,
     },
     averageCard: {
-        backgroundColor: '#fff0e8',
-        borderRadius: 16,
+        backgroundColor: '#FFF0D9',
+        borderRadius: 20,
         padding: 20,
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: '#91483C',
+        borderColor: '#F5CBA7',
+        marginHorizontal: 16,
     },
     averageTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#91483C',
         marginBottom: 8,
+        fontFamily: 'Fredoka',
     },
     averageAmount: {
         fontSize: 28,
         fontWeight: 'bold',
         color: '#91483C',
         marginBottom: 8,
+        fontFamily: 'Fredoka',
     },
     averageNote: {
         fontSize: 14,
         color: '#666',
         lineHeight: 20,
+        fontFamily: 'Fredoka',
     },
     projectionCard: {
-        backgroundColor: '#f8f9fa',
-        borderRadius: 16,
+        backgroundColor: '#FFE8CC',
+        borderRadius: 20,
         padding: 20,
         borderWidth: 1,
-        borderColor: '#e9ecef',
+        borderColor: '#F5CBA7',
+        marginHorizontal: 16,
+        marginBottom: 24,
     },
     projectionTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#91483C',
         marginBottom: 8,
+        fontFamily: 'Fredoka',
     },
     projectionAmount: {
         fontSize: 24,
         fontWeight: 'bold',
         color: '#91483C',
         marginBottom: 8,
+        fontFamily: 'Fredoka',
     },
     projectionNote: {
         fontSize: 14,
         color: '#666',
         lineHeight: 20,
+        fontFamily: 'Fredoka',
     },
 });

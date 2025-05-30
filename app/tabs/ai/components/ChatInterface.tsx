@@ -8,7 +8,7 @@ import {
     TextInput,
     ScrollView,
     Alert,
-    ActivityIndicator,
+    ActivityIndicator,ImageBackground, Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
@@ -17,6 +17,9 @@ import { addDoc, collection } from 'firebase/firestore';
 import { auth, db } from '../../../../lib/firebase';
 import { romanianToEnglish } from '../../../../lib/translationDictionary';
 import { findCategoryByProduct } from '../../../../lib/productAssociation';
+import bg from '@assets/bg/AIback.png'; // fundalul principal
+
+
 
 interface ChatMessage {
     id: string;
@@ -42,6 +45,7 @@ interface QuickReply {
 }
 
 export default function ChatInterface(): JSX.Element {
+
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
             id: '1',
@@ -731,8 +735,8 @@ export default function ChatInterface(): JSX.Element {
     };
 
     return (
-        <View style={styles.container}>
-            <ScrollView
+        <ImageBackground source={bg} style={styles.container} resizeMode="cover">
+        <ScrollView
                 ref={scrollViewRef}
                 style={styles.messagesContainer}
                 showsVerticalScrollIndicator={false}
@@ -819,7 +823,7 @@ export default function ChatInterface(): JSX.Element {
                     <Ionicons name="send" size={20} color="white" />
                 </TouchableOpacity>
             </View>
-        </View>
+        </ImageBackground>
     );
 }
 
