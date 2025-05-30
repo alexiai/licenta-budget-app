@@ -1,4 +1,3 @@
-
 // chart/index.tsx - with budget period filtering
 import { ScrollView, Text, View, Image, ImageBackground, Dimensions, TouchableOpacity } from 'react-native';
 import { PieChart as ChartKitPie } from 'react-native-chart-kit';
@@ -14,6 +13,7 @@ import categories from '@lib/categories';
 import { filterExpensesByPeriod, getPeriodTitle } from '@lib/utils/expenseFilters';
 
 export default function ChartOverview() {
+    const screenWidth = Dimensions.get('window').width;
     const [allExpenses, setAllExpenses] = useState<any[]>([]);
     const [insights, setInsights] = useState<any>({});
     const [expandedCategories, setExpandedCategories] = useState<{ [key: string]: boolean }>({});
@@ -141,6 +141,10 @@ export default function ChartOverview() {
 
     const periodTitle = selectedBudget ? getPeriodTitle(selectedBudget, periodOffset) : 'All Time';
 
+    const getChartData = () => {
+        return pieData;
+    };
+
     return (
         <ImageBackground source={bg} resizeMode="cover" style={styles.container}>
             <View style={styles.topContainer}>
@@ -174,28 +178,33 @@ export default function ChartOverview() {
             </View>
 
             <ScrollView
-                style={styles.scrollableContent}
-                contentContainerStyle={styles.scrollContainer}
+                style={[styles.scrollableContent]}
+                contentContainerStyle={[styles.scrollContainer]}
             >
-                <View style={styles.pieSection}>
-                    <ChartKitPie
-                        data={pieData}
-                        width={Dimensions.get('window').width - 46}
-                        height={220}
-                        accessor="value"
-                        backgroundColor="transparent"
-                        paddingLeft="15"
-                        absolute
-                        hideLegend={true}
-                        chartConfig={{
-                            color: () => `#000`,
-                            labelColor: () => '#91483c',
-                            propsForLabels: { fontSize: 13, fontFamily: 'Fredoka' },
-                        }}
-                        style={{ marginTop: 20, borderRadius: 16 }}
-                    />
+                <View style={[styles.pieSection]}> {/* DEBUG COLOR: galben */}
+                    <View style={[styles.pieWrapper]}> {/* DEBUG COLOR: verde */}
+                        <ChartKitPie
+                            data={getChartData()}
+                            width={300} // sau 0.6, ajustează
+                            height={150}
+                            accessor="value"
+                            backgroundColor="transparent"
+                            absolute
+                            hasLegend={false}
+                            chartConfig={{
+                                color: () => `#000`,
+                                labelColor: () => 'transparent',
+                                propsForLabels: { fontSize: 0 },
+                            }}
+                            style={{
+                                borderRadius: 16,
+                                transform: [{ translateX: 70 }], // mutat spre dreapta
+                            }}
+                        />
 
-                    <View style={styles.legendBox}>
+                    </View>
+
+                    <View style={[styles.legendBox, ]}> {/* DEBUG COLOR: portocaliu */}
                         {pieData
                             .sort((a, b) => b.value - a.value)
                             .map((item, i) => {

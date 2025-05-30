@@ -1,4 +1,3 @@
-// SmartTipsCard.tsx
 import React from 'react';
 import {
     View,
@@ -12,7 +11,7 @@ import { SpendingAnalysis } from './SmartAdviceSection';
 import tipsImg from '@assets/decor/aiTips.png';
 
 interface SmartTipsCardProps {
-    analysis?: SpendingAnalysis;
+    analysis?: SpendingAnalysis | null;
 }
 
 interface SmartTip {
@@ -24,21 +23,53 @@ interface SmartTip {
     savingsAmount?: number;
     category?: string;
     priority: 'high' | 'medium' | 'low';
+    type: 'seasonal' | 'pattern' | 'goal' | 'insight' | 'general';
 }
 
 export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Element {
     const generateSmartTips = (): SmartTip[] => {
         const tips: SmartTip[] = [];
-        if (!analysis) return tips;
+        if (!analysis) return getDefaultTips();
 
         const {
             topCategories = [],
             totalThisMonth = 0,
             totalLastMonth = 0,
             subcategoryBreakdown = {},
-            categoryBreakdown = {}
+            categoryBreakdown = {},
+            spendingPatterns,
+            seasonalContext,
+            weeklyStats
         } = analysis;
 
+        // 🎄 SEASONAL TIPS
+        if (seasonalContext.isHolidaySeason) {
+            if (seasonalContext.month === 'December') {
+                tips.push({
+                    id: 'holiday-budgeting',
+                    title: '🎄 Bunny Holiday Plan',
+                    description: `Holiday season is here! 🐰🎁 Set a specific gift budget to avoid overspending. Your bunny will still love you even with thoughtful, budget-friendly gifts!`,
+                    icon: 'gift',
+                    emoji: '🐰🎄',
+                    priority: 'high',
+                    type: 'seasonal'
+                });
+            }
+
+            if (seasonalContext.month === 'January') {
+                tips.push({
+                    id: 'new-year-reset',
+                    title: '🌟 New Year, New Bunny Habits',
+                    description: `Fresh start time! 🐰✨ January is perfect for setting spending goals. Try the 50/30/20 rule: 50% needs, 30% wants, 20% savings!`,
+                    icon: 'star',
+                    emoji: '🐰🌟',
+                    priority: 'high',
+                    type: 'seasonal'
+                });
+            }
+        }
+
+        // 🔥 HIGH SPENDING CATEGORY ALERTS
         topCategories.forEach((categoryData, index) => {
             if (categoryData.percentage > 30 && index === 0) {
                 const potentialSavings = Math.round(categoryData.amount * 0.1);
@@ -50,146 +81,177 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
                     emoji: '🐰⚠️',
                     savingsAmount: potentialSavings,
                     category: categoryData.category,
-                    priority: 'high'
+                    priority: 'high',
+                    type: 'pattern'
                 });
             }
         });
 
-        const coffeeSpending = subcategoryBreakdown['Coffee'] || 0;
-        const drinksSpending = subcategoryBreakdown['Drinks'] || 0;
-        const totalBeverage = coffeeSpending + drinksSpending;
-
-        if (totalBeverage > 150) {
-            const homeBrewSavings = Math.round(totalBeverage * 0.6);
-            tips.push({
-                id: 'coffee-optimization',
-                title: '☕ Bunny\'s Brew Tip',
-                description: `You spent ${totalBeverage.toFixed(0)} RON on coffee & drinks! Making coffee at home could save you ${homeBrewSavings} RON/month. That's a lot of carrots! 🥕☕`,
-                icon: 'cafe',
-                emoji: '🐰☕',
-                savingsAmount: homeBrewSavings,
-                category: 'Food & Drinks',
-                priority: 'medium'
-            });
-        }
-
-        const spendingIncrease = totalThisMonth - totalLastMonth;
-        if (spendingIncrease > 200) {
-            tips.push({
-                id: 'spending-increase',
-                title: '📈 Bunny Budget Alert!',
-                description: `Your spending increased by ${spendingIncrease.toFixed(0)} RON this month! Time to hop back to your budget plan. Even energetic bunnies need rest! 🐰💤`,
-                icon: 'trending-up',
-                emoji: '🐰📊',
-                priority: 'high'
-            });
-        } else if (spendingIncrease < -100) {
-            tips.push({
-                id: 'spending-decrease',
-                title: '🎉 Bunny Celebration Time!',
-                description: `Amazing! You saved ${Math.abs(spendingIncrease).toFixed(0)} RON compared to last month! Your bunny is so proud! Keep hopping toward your goals! 🐰🎊`,
-                icon: 'trophy',
-                emoji: '🐰🏆',
-                priority: 'low'
-            });
-        }
-
+        // 🍕 RESTAURANT VS COOKING ANALYSIS
         const restaurantSpending = Number(subcategoryBreakdown['Restaurant'] || 0);
         const groceriesSpending = Number(subcategoryBreakdown['Groceries'] || 0);
 
         if (restaurantSpending > groceriesSpending && restaurantSpending > 150) {
             tips.push({
                 id: 'restaurant-vs-cooking',
-                title: 'Cook More, Save More! 🐰🍳',
-                description: `You spent ${restaurantSpending.toFixed(0)} RON on restaurants vs ${groceriesSpending.toFixed(0)} RON on groceries. Cooking at home could save you ${(restaurantSpending * 0.6).toFixed(0)} RON/month!`,
-                savingsAmount: restaurantSpending * 0.6,
+                title: '🍳 Cook More, Save More!',
+                description: `You spent ${restaurantSpending.toFixed(0)} RON on restaurants vs ${groceriesSpending.toFixed(0)} RON on groceries. 🐰👨‍🍳 Cooking at home just once more per week could save you ${(restaurantSpending * 0.15).toFixed(0)} RON/month!`,
+                savingsAmount: restaurantSpending * 0.15,
                 priority: 'medium',
                 category: 'Food & Drinks',
                 emoji: '🐰🍳',
-                icon: 'restaurant'
+                icon: 'restaurant',
+                type: 'insight'
             });
         }
 
+        // 🚗 TRANSPORT OPTIMIZATION
         const transportSpending = Number(categoryBreakdown['Transport'] || 0);
-        if (transportSpending > 300) {
+        const uberSpending = Number(subcategoryBreakdown['Taxi'] || 0);
+
+        if (uberSpending > 100) {
             tips.push({
-                id: 'transport-optimization',
-                title: 'Hop Smart, Save Big! 🐰🚌',
-                description: `Transport costs ${transportSpending.toFixed(0)} RON/month. Consider public transport or carpooling to save ${(transportSpending * 0.3).toFixed(0)} RON monthly!`,
-                savingsAmount: transportSpending * 0.3,
+                id: 'rideshare-optimization',
+                title: '🐇 Hop Smart with Transport!',
+                description: `You've spent ${uberSpending.toFixed(0)} RON on rideshares this month. 🚌 Try public transport or walking for short trips - your bunny legs are strong! Could save ${(uberSpending * 0.4).toFixed(0)} RON!`,
+                savingsAmount: uberSpending * 0.4,
                 priority: 'medium',
                 category: 'Transport',
                 emoji: '🐰🚌',
-                icon: 'car'
+                icon: 'car',
+                type: 'insight'
             });
         }
 
-        const entertainmentSpending = Number(categoryBreakdown['Entertainment'] || 0);
-        if (totalThisMonth > 0 && entertainmentSpending > totalThisMonth * 0.15) {
+        // ☕ COFFEE HABIT TRACKER
+        const coffeeSpending = Number(subcategoryBreakdown['Coffee'] || 0);
+        if (coffeeSpending > 80) {
+            const dailyCoffeeAvg = coffeeSpending / new Date().getDate();
             tips.push({
-                id: 'entertainment-budget',
-                title: 'Fun Police Alert! 🐰🚨',
-                description: `Entertainment is ${((entertainmentSpending / totalThisMonth) * 100).toFixed(1)}% of your budget. Consider setting a monthly entertainment limit of ${(totalThisMonth * 0.1).toFixed(0)} RON.`,
-                savingsAmount: entertainmentSpending - (totalThisMonth * 0.1),
-                priority: 'medium',
-                category: 'Entertainment',
-                emoji: '🐰🎮',
-                icon: 'game-controller'
+                id: 'coffee-habit',
+                title: '☕ Bunny Coffee Analytics',
+                description: `Your daily coffee average: ${dailyCoffeeAvg.toFixed(0)} RON! 🐰☕ Making coffee at home 2-3 times per week could save ${(coffeeSpending * 0.3).toFixed(0)} RON while still enjoying your café treats!`,
+                savingsAmount: coffeeSpending * 0.3,
+                priority: 'low',
+                category: 'Food & Drinks',
+                emoji: '🐰☕',
+                icon: 'cafe',
+                type: 'pattern'
             });
         }
 
-        const savingsSpending = Number(categoryBreakdown['Savings'] || 0);
-        const savingsPercentage = totalThisMonth > 0 ? (savingsSpending / totalThisMonth) * 100 : 0;
+        // 📈 SPENDING SPIKE ALERTS
+        spendingPatterns.recentSpikes.forEach(spike => {
+            if (spike.increase > 30) {
+                tips.push({
+                    id: `spike-${spike.category}`,
+                    title: `📈 ${spike.category} Spike Detected!`,
+                    description: `🛍️ Your ${spike.category} spending increased by ${spike.increase.toFixed(0)}% ${spike.timeframe}. Is it a planned expense or retail therapy? Either way, your bunny is watching! 🐰👀`,
+                    icon: 'trending-up',
+                    emoji: '🐰📊',
+                    priority: 'medium',
+                    category: spike.category,
+                    type: 'pattern'
+                });
+            }
+        });
 
-        if (savingsPercentage < 10) {
-            const suggestedSavings = Math.round(totalThisMonth * 0.1);
-            tips.push({
-                id: 'savings-encouragement',
-                title: '🥕 Bunny\'s Carrot Fund',
-                description: `Only ${savingsPercentage.toFixed(1)}% saved this month! Try saving ${suggestedSavings} RON (10% of spending). Every carrot counts for winter! 🐰❄️`,
-                icon: 'wallet',
-                emoji: '🐰💰',
-                savingsAmount: suggestedSavings,
-                category: 'Savings',
-                priority: 'high'
-            });
-        } else if (savingsPercentage > 20) {
-            tips.push({
-                id: 'savings-celebration',
-                title: '💎 Bunny\'s Treasure Achievement',
-                description: `Wow! ${savingsPercentage.toFixed(1)}% saved! You're a savings superstar! Your future bunny-self will thank you! 🐰✨`,
-                icon: 'diamond',
-                emoji: '🐰💎',
-                priority: 'low'
-            });
+        // 🎯 GOAL-BASED ADVICE (when total is available)
+        if (totalThisMonth > 0) {
+            const monthProgress = new Date().getDate() / new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+            const projectedMonthly = totalThisMonth / monthProgress;
+
+            if (projectedMonthly > totalLastMonth * 1.2) {
+                tips.push({
+                    id: 'monthly-projection',
+                    title: '🎯 Monthly Budget Check',
+                    description: `You're on track to spend ${projectedMonthly.toFixed(0)} RON this month vs ${totalLastMonth.toFixed(0)} RON last month. 🐰📊 Time to slow down those bunny hops to the store!`,
+                    icon: 'analytics',
+                    emoji: '🐰🎯',
+                    priority: 'high',
+                    type: 'goal'
+                });
+            }
         }
 
-        const averageDailySpending = analysis.averageDailySpending || 0;
-        if (averageDailySpending > 100) {
+        // 💎 WEEKEND VS WEEKDAY INSIGHTS
+        if (spendingPatterns.weekdayVsWeekend.weekend > spendingPatterns.weekdayVsWeekend.weekday * 0.4) {
             tips.push({
-                id: 'daily-spending',
-                title: '📅 Bunny\'s Daily Wisdom',
-                description: `Average daily spending: ${averageDailySpending.toFixed(0)} RON. Try setting a daily limit of 80 RON. Small hops lead to big journeys! 🐰👣`,
+                id: 'weekend-spending',
+                title: '🎮 Weekend Warrior Alert',
+                description: `Weekend spending: ${spendingPatterns.weekdayVsWeekend.weekend.toFixed(0)} RON vs weekdays: ${spendingPatterns.weekdayVsWeekend.weekday.toFixed(0)} RON. 🐰🎉 Weekends are for fun, but try some free activities too - bunny parks are free!`,
                 icon: 'calendar',
-                emoji: '🐰📅',
-                priority: 'medium'
+                emoji: '🐰🎮',
+                priority: 'low',
+                type: 'insight'
             });
         }
 
+        // 📊 WEEKLY PERFORMANCE
+        if (weeklyStats.trend === 'decreasing') {
+            tips.push({
+                id: 'weekly-improvement',
+                title: '📊 Bunny Progress Report',
+                description: `Great job! 🎉 This week you spent ${weeklyStats.currentWeek.toFixed(0)} RON vs ${weeklyStats.lastWeek.toFixed(0)} RON last week. Your bunny is proud of your self-control! 🐰👏`,
+                icon: 'trending-down',
+                emoji: '🐰📉',
+                priority: 'low',
+                type: 'goal'
+            });
+        }
+
+        // 🚨 TOP SPENDING DAY INSIGHT
+        if (weeklyStats.topSpendingDay.amount > 0) {
+            tips.push({
+                id: 'top-spending-day',
+                title: `🚨 ${weeklyStats.topSpendingDay.day} Spending Spike`,
+                description: `${weeklyStats.topSpendingDay.day} was your highest spending day: ${weeklyStats.topSpendingDay.amount.toFixed(0)} RON! 🐰📅 Bunnies tend to overspend on ${weeklyStats.topSpendingDay.day}s - plan ahead next time!`,
+                icon: 'calendar',
+                emoji: '🐰🚨',
+                priority: 'low',
+                type: 'pattern'
+            });
+        }
+
+        // Sort by priority and limit to 6 tips
         const priorityOrder = { high: 0, medium: 1, low: 2 };
         return tips.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]).slice(0, 6);
     };
 
-    const tips = generateSmartTips();
+    const getDefaultTips = (): SmartTip[] => {
+        return [
+            {
+                id: 'loading-tip',
+                title: '🐰 Getting Ready...',
+                description: 'Your bunny is analyzing your spending patterns to give you personalized advice! Add more expenses for better insights.',
+                icon: 'hourglass',
+                emoji: '🐰⏳',
+                priority: 'medium',
+                type: 'general'
+            }
+        ];
+    };
 
     const getPriorityColor = (priority: string) => {
         switch (priority) {
-            case 'high': return '#FF8C42';
-            case 'medium': return '#FFA94D';
-            case 'low': return '#FFD6A5';
-            default: return '#FFE0B2';
+            case 'high': return '#FF6B6B';
+            case 'medium': return '#4ECDC4';
+            case 'low': return '#45B7D1';
+            default: return '#95A5A6';
         }
     };
+
+    const getTypeIcon = (type: string) => {
+        switch (type) {
+            case 'seasonal': return '🎄';
+            case 'pattern': return '📊';
+            case 'goal': return '🎯';
+            case 'insight': return '💡';
+            default: return '🐰';
+        }
+    };
+
+    const tips = generateSmartTips();
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -198,7 +260,7 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
                 <View style={styles.headerText}>
                     <Text style={styles.headerTitle}>Smart Bunny Tips</Text>
                     <Text style={styles.headerSubtitle}>
-                        Personalized advice based on your spending patterns
+                        AI-powered personalized advice based on your spending patterns
                     </Text>
                 </View>
             </View>
@@ -220,14 +282,15 @@ export default function SmartTipsCard({ analysis }: SmartTipsCardProps): JSX.Ele
                                     <Ionicons name={tip.icon as any} size={16} color="white" />
                                 </View>
                                 <Text style={styles.tipEmoji}>{tip.emoji}</Text>
+                                <Text style={styles.tipType}>{getTypeIcon(tip.type)}</Text>
                             </View>
                             <Text style={styles.tipTitle}>{tip.title}</Text>
                             <Text style={styles.tipDescription}>{tip.description}</Text>
                             {tip.savingsAmount && (
                                 <View style={styles.savingsContainer}>
-                                    <Ionicons name="trending-down" size={16} color="#4CAF50" />
+                                    <Ionicons name="leaf" size={16} color="#4CAF50" />
                                     <Text style={styles.savingsText}>
-                                        Potential savings: {tip.savingsAmount} RON/month
+                                        Potential savings: {tip.savingsAmount.toFixed(0)} RON/month
                                     </Text>
                                 </View>
                             )}
@@ -276,6 +339,7 @@ const styles = StyleSheet.create({
         color: '#666',
         textAlign: 'center',
         lineHeight: 24,
+        fontFamily: 'Fredoka',
     },
     tipsContainer: {
         gap: 16,
@@ -287,6 +351,10 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: '#FFD4A8',
         elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
     tipHeader: {
         flexDirection: 'row',
@@ -301,30 +369,40 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginRight: 12,
     },
-    tipEmoji: { fontSize: 24 },
+    tipEmoji: {
+        fontSize: 20,
+        marginRight: 8,
+    },
+    tipType: {
+        fontSize: 16,
+        marginLeft: 'auto',
+    },
     tipTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#FF6B00',
+        color: '#91483C',
         marginBottom: 8,
+        fontFamily: 'Fredoka',
     },
     tipDescription: {
-        fontSize: 16,
-        color: '#91483C',
-        lineHeight: 22,
+        fontSize: 14,
+        color: '#666',
+        lineHeight: 20,
         marginBottom: 12,
+        fontFamily: 'Fredoka',
     },
     savingsContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#E8F5E8',
-        padding: 12,
-        borderRadius: 8,
+        padding: 8,
+        borderRadius: 12,
     },
     savingsText: {
-        marginLeft: 8,
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 12,
         color: '#4CAF50',
+        fontWeight: 'bold',
+        marginLeft: 4,
+        fontFamily: 'Fredoka',
     },
 });

@@ -49,7 +49,7 @@ export default function ChatInterface(): JSX.Element {
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
             id: '1',
-            text: 'Salut! Sunt asistentul tău pentru cheltuieli. Poți să-mi spui ce ai cheltuit azi, fie vocal, fie prin text. De exemplu: "Am fost la benzinărie și am cheltuit 100 de lei azi."',
+            text: 'Hi there! I\'m your smart assistant for tracking expenses. You can tell me what you spent today, either by voice or text. For example: "I spent 100 RON on gas today." I also understand Romanian! 🇬🇧🇷🇴',
             isUser: false,
             timestamp: new Date(),
         },
@@ -61,6 +61,7 @@ export default function ChatInterface(): JSX.Element {
     const [currentParsing, setCurrentParsing] = useState<Partial<ParsedExpense> | null>(null);
     const [awaitingInput, setAwaitingInput] = useState<string | null>(null);
     const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+    const [userLanguage, setUserLanguage] = useState<'en' | 'ro'>('en'); // Track user's preferred language
 
     const scrollViewRef = useRef<ScrollView | null>(null);
     const [recognition, setRecognition] = useState<any>(null);
@@ -84,9 +85,10 @@ export default function ChatInterface(): JSX.Element {
             }
 
             const recognitionInstance = new SpeechRecognition();
+            // Start with Romanian but we'll detect language from input
             recognitionInstance.lang = 'ro-RO';
             recognitionInstance.interimResults = false;
-            recognitionInstance.maxAlternatives = 1;
+            recognitionInstance.maxAlternatives = 3; // Get multiple alternatives to help with detection
             recognitionInstance.continuous = false;
 
             recognitionInstance.onstart = () => {
@@ -199,12 +201,25 @@ export default function ChatInterface(): JSX.Element {
         }
     };
 
-    const speakText = (text: string) => {
-        Speech.speak(text, {
-            language: 'ro-RO',
+    const speakText = (text: string, language?: 'en' | 'ro') => {
+        const targetLanguage = language || userLanguage;
+        const speechOptions = {
+            language: targetLanguage === 'ro' ? 'ro-RO' : 'en-US',
             pitch: 1,
-            rate: 0.9,
-        });
+            rate: 0.85,
+            voice: undefined as string | undefined
+        };
+
+        // Try to use a more natural voice if available
+        if (targetLanguage === 'ro') {
+            // For Romanian, try to find a Romanian voice
+            speechOptions.voice = 'com.apple.ttsbundle.Ioana-compact'; // iOS Romanian voice
+        } else {
+            // For English, use default or a more natural voice
+            speechOptions.voice = 'com.apple.ttsbundle.Samantha-compact'; // iOS English voice
+        }
+
+        Speech.speak(text, speechOptions);
     };
 
     const detectLanguage = async (text: string): Promise<'ro' | 'en'> => {
@@ -410,7 +425,7 @@ export default function ChatInterface(): JSX.Element {
         return mapping;
     };
 
-    const addMessage = (text: string, isUser: boolean, isTranslated = false, originalText?: string) => {
+    const addMessage = (text: string, isUser: boolean, isTranslated = false, originalText?: string, language?: 'en' | 'ro') => {
         const newMessage: ChatMessage = {
             id: Date.now().toString(),
             text,
@@ -424,29 +439,80 @@ export default function ChatInterface(): JSX.Element {
         setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     };
 
+    const getLocalizedText = (key: string, language: 'en' | 'ro' = userLanguage): string => {
+        const texts = {
+            amountQuestion: {
+                en: 'How much did you spend? Please specify the amount.',
+                ro: 'Cât ai cheltuit? Te rog să specifici suma.'
+            },
+            dateQuestion: {
+                en: 'When did this expense occur? You can say "today", "yesterday", "3 days ago" or a specific date.',
+                ro: 'Când a avut loc această cheltuială? Poți spune "azi", "ieri", "acum 3 zile" sau o dată specifică.'
+            },
+            categoryQuestion: {
+                en: 'What category was this expense for? Choose one from the options below:',
+                ro: 'Pentru ce categorie a fost această cheltuială? Alege una din opțiunile de mai jos:'
+            },
+            subcategoryQuestion: {
+                en: 'You chose {category}. What subcategory?',
+                ro: 'Ai ales {category}. Ce subcategorie?'
+            },
+            today: {
+                en: 'Today',
+                ro: 'Azi'
+            },
+            yesterday: {
+                en: 'Yesterday',
+                ro: 'Ieri'
+            },
+            twoDaysAgo: {
+                en: '2 days ago',
+                ro: 'Acum 2 zile'
+            },
+            oneWeekAgo: {
+                en: '1 week ago',
+                ro: 'Acum o săptămână'
+            },
+            expenseSaved: {
+                en: '✅ Perfect! I saved the expense of {amount} RON for {category} ({subcategory}) from {date}.',
+                ro: '✅ Perfect! Am salvat cheltuiala de {amount} lei pentru {category} ({subcategory}) din data de {date}.'
+            },
+            expenseSavedVoice: {
+                en: 'Expense saved successfully!',
+                ro: 'Cheltuiala a fost salvată cu succes!'
+            },
+            couldNotUnderstand: {
+                en: 'I couldn\'t understand the expense. Could you rephrase? For example: "I spent 50 RON on coffee today"',
+                ro: 'Nu am putut înțelege cheltuiala. Poți să reformulezi? De exemplu: "Am cheltuit 50 lei pe cafea azi"'
+            }
+        };
+
+        return texts[key]?.[language] || texts[key]?.en || key;
+    };
+
     const generateFollowUpQuestions = (parsed: ParsedExpense) => {
         const questions: string[] = [];
         const replies: QuickReply[] = [];
 
         if (!parsed.amount) {
-            questions.push('Cât ai cheltuit? Te rog să specifici suma.');
+            questions.push(getLocalizedText('amountQuestion'));
             setAwaitingInput('amount');
         } else if (!parsed.date) {
-            questions.push('Când a avut loc această cheltuială? Poți spune "azi", "ieri", "acum 3 zile" sau o dată specifică.');
+            questions.push(getLocalizedText('dateQuestion'));
 
             const dateOptions = [
-                { text: 'Azi', date: new Date().toISOString().split('T')[0] },
-                { text: 'Ieri', date: (() => {
+                { text: getLocalizedText('today'), date: new Date().toISOString().split('T')[0] },
+                { text: getLocalizedText('yesterday'), date: (() => {
                         const yesterday = new Date();
                         yesterday.setDate(yesterday.getDate() - 1);
                         return yesterday.toISOString().split('T')[0];
                     })() },
-                { text: 'Acum 2 zile', date: (() => {
+                { text: getLocalizedText('twoDaysAgo'), date: (() => {
                         const twoDaysAgo = new Date();
                         twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
                         return twoDaysAgo.toISOString().split('T')[0];
                     })() },
-                { text: 'Acum o săptămână', date: (() => {
+                { text: getLocalizedText('oneWeekAgo'), date: (() => {
                         const weekAgo = new Date();
                         weekAgo.setDate(weekAgo.getDate() - 7);
                         return weekAgo.toISOString().split('T')[0];
@@ -473,7 +539,7 @@ export default function ChatInterface(): JSX.Element {
 
             setAwaitingInput('date');
         } else if (!parsed.category) {
-            questions.push('Pentru ce categorie a fost această cheltuială? Alege una din opțiunile de mai jos:');
+            questions.push(getLocalizedText('categoryQuestion'));
 
             categories.forEach(cat => {
                 replies.push({
@@ -508,7 +574,8 @@ export default function ChatInterface(): JSX.Element {
     };
 
     const askForSubcategory = (category: string, subcategories: string[]) => {
-        addMessage(`Ai ales ${category}. Ce subcategorie?`, false);
+        const message = getLocalizedText('subcategoryQuestion').replace('{category}', category);
+        addMessage(message, false);
 
         const replies: QuickReply[] = subcategories.slice(0, 4).map(sub => ({
             text: sub,
@@ -676,13 +743,18 @@ export default function ChatInterface(): JSX.Element {
 
             await addDoc(collection(db, 'expenses'), expenseData);
 
-            const displayDate = expense.date === new Date().toISOString().split('T')[0] ? 'azi' :
-                new Date(dateString).toLocaleDateString('ro-RO');
+            const displayDate = expense.date === new Date().toISOString().split('T')[0] ?
+                (userLanguage === 'ro' ? 'azi' : 'today') :
+                new Date(dateString).toLocaleDateString(userLanguage === 'ro' ? 'ro-RO' : 'en-US');
 
-            const confirmationMessage = `✅ Perfect! Am salvat cheltuiala de ${expense.amount} lei pentru ${expense.category} (${expense.subcategory || 'General'}) din data de ${displayDate}.`;
+            const confirmationMessage = getLocalizedText('expenseSaved')
+                .replace('{amount}', expense.amount.toString())
+                .replace('{category}', expense.category)
+                .replace('{subcategory}', expense.subcategory || 'General')
+                .replace('{date}', displayDate);
 
             addMessage(confirmationMessage, false);
-            speakText('Cheltuiala a fost salvată cu succes!');
+            speakText(getLocalizedText('expenseSavedVoice'));
 
             setCurrentParsing(null);
             setAwaitingInput(null);
@@ -701,6 +773,11 @@ export default function ChatInterface(): JSX.Element {
         if (!textToSend) return;
 
         setIsProcessing(true);
+
+        // Detect and set user language based on input
+        const detectedLang = await detectLanguage(textToSend);
+        setUserLanguage(detectedLang);
+
         addMessage(textToSend, true);
         setInputText('');
         setQuickReplies([]);
@@ -716,14 +793,16 @@ export default function ChatInterface(): JSX.Element {
                     saveExpense(parsed);
                 } else {
                     if (!generateFollowUpQuestions(parsed)) {
-                        addMessage('Nu am putut înțelege cheltuiala. Poți să reformulezi? De exemplu: "Am cheltuit 50 lei pe cafea azi"', false);
-                        speakText('Nu am putut înțelege cheltuiala. Poți să reformulezi?');
+                        const errorMessage = getLocalizedText('couldNotUnderstand');
+                        addMessage(errorMessage, false);
+                        speakText(errorMessage);
                     }
                 }
             }
         } catch (error) {
             console.log('Error processing message:', error);
-            addMessage('A apărut o eroare. Te rog să încerci din nou.', false);
+            const errorText = userLanguage === 'ro' ? 'A apărut o eroare. Te rog să încerci din nou.' : 'An error occurred. Please try again.';
+            addMessage(errorText, false);
         } finally {
             setIsProcessing(false);
         }
@@ -736,7 +815,14 @@ export default function ChatInterface(): JSX.Element {
 
     return (
         <ImageBackground source={bg} style={styles.container} resizeMode="cover">
-        <ScrollView
+            {/* Language Support Banner */}
+            <View style={styles.languageBanner}>
+                <Text style={styles.languageBannerText}>
+                    Supports English and Romanian 🇬🇧🇷🇴
+                </Text>
+            </View>
+
+            <ScrollView
                 ref={scrollViewRef}
                 style={styles.messagesContainer}
                 showsVerticalScrollIndicator={false}
@@ -831,6 +917,19 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#fefaf6',
+    },
+    languageBanner: {
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        alignItems: 'center',
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+    },
+    languageBannerText: {
+        fontSize: 14,
+        color: '#91483C',
+        fontWeight: '500',
     },
     messagesContainer: {
         flex: 1,

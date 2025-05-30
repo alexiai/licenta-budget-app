@@ -80,7 +80,6 @@ export default function BudgetScreen() {
         }).filter((entry) => entry.value > 0);
     };
 
-
     const getSubcategoryIcon = (subName: string) => {
         const found = categories.find(cat => cat.subcategories.includes(subName));
         return found ? found.icon : require('@assets/icons/other.png');
@@ -154,23 +153,45 @@ export default function BudgetScreen() {
                                     <Text style={styles.chartToggle}>Tap to show chart</Text>
                                 </TouchableOpacity>
                                 {showChart && (
-                                    <ChartKitPie
-                                        data={getChartKitData()}
-                                        width={Dimensions.get('window').width - 46} // 23px padding each side
-                                        height={220}
-                                        accessor="value"
-                                        backgroundColor="transparent"
-                                        paddingLeft="15"
-                                        absolute
-                                        chartConfig={{
-                                            color: () => `#000`,
-                                            labelColor: () => '#91483c',
-                                            propsForLabels: { fontSize: 13, fontFamily: 'Fredoka' },
-                                        }}
-                                        style={{ marginTop: 20, borderRadius: 16 }}
-                                    />
-                                )}
+                                    <View style={styles.chartContainer}>
+                                        <View style={styles.pieWrapper}>
+                                            <ChartKitPie
+                                                data={getChartKitData()}
+                                                width={260}
+                                                height={150}
+                                                accessor="value"
+                                                backgroundColor="transparent"
+                                                absolute
+                                                hasLegend={false}
+                                                chartConfig={{
+                                                    color: () => `#000`,
+                                                    labelColor: () => 'transparent',
+                                                    propsForLabels: { fontSize: 0 },
+                                                }}
+                                                style={{
+                                                    borderRadius: 16,
+                                                }}
+                                            />
+                                        </View>
 
+                                        <View style={styles.chartLegendBox}>
+                                            {getChartKitData()
+                                                .sort((a, b) => b.value - a.value)
+                                                .map((item, i) => {
+                                                    const totalValue = getChartKitData().reduce((sum, entry) => sum + entry.value, 0);
+                                                    const percent = totalValue > 0 ? ((item.value / totalValue) * 100).toFixed(0) : 0;
+                                                    return (
+                                                        <View key={item.name} style={styles.chartLegendItem}>
+                                                            <View style={[styles.colorDot, { backgroundColor: item.color }]} />
+                                                            <Text style={styles.chartLegendText}>
+                                                                {item.name}:<Text style={styles.legendPercent}> {percent}%</Text>
+                                                            </Text>
+                                                        </View>
+                                                    );
+                                                })}
+                                        </View>
+                                    </View>
+                                )}
                             </View>
 
                             <Text style={styles.section}>Income</Text>
@@ -192,7 +213,6 @@ export default function BudgetScreen() {
                     showsVerticalScrollIndicator={false}
                 />
             )}
-
         </ImageBackground>
     );
 }

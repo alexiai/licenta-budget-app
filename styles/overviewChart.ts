@@ -24,10 +24,8 @@ export default StyleSheet.create({
         letterSpacing: -0.7,
     },
     legendBox: {
-        marginLeft: 10,
         flex: 1,
         justifyContent: 'center',
-        flexWrap: 'wrap',
     },
     legendItem: {
         flexDirection: 'row',
@@ -65,9 +63,11 @@ export default StyleSheet.create({
     },
 
     pieWrapper: {
-        width: 130,
-        height: 130,
-        marginLeft:15
+        width: 150,
+        height: 150,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: -10,
     },
 
     pieSection: {
@@ -75,8 +75,8 @@ export default StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 20,
-        flexWrap: 'wrap', // pentru a permite wrap pe ecrane mici
-        gap: 10,
+        paddingHorizontal: 20,
+        gap: 5,
     },
 
 

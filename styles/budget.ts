@@ -117,6 +117,7 @@ export default StyleSheet.create({
         height: 140,
         alignSelf: 'center',
         marginTop: 10,
+        marginRight:-5
     },
 
     pieChart: {
@@ -131,7 +132,6 @@ export default StyleSheet.create({
         fontWeight: 'bold',
         color: '#52366b',
         marginTop: 24,
-        //marginBottom: 8,
         fontFamily: 'Fredoka',
     },
 
@@ -175,15 +175,9 @@ export default StyleSheet.create({
         marginTop: 10,
     },
 
-    legendBox: {
-        marginLeft: 8,
-        justifyContent: 'center',
-    },
-
     legendItem: {
         flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 6,
+        alignItems: 'center'
     },
 
     colorDot: {
@@ -196,11 +190,35 @@ export default StyleSheet.create({
     legendText: {
         fontSize: 14,
         fontFamily: 'Fredoka',
+        fontWeight: 'bold',
         color: '#52366b',
     },
 
     legendPercent: {
         fontWeight: 'bold',
-        marginRight: 4,
+    },
+
+    chartContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 10,
+    },
+
+    chartLegendBox: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+
+    chartLegendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 3.5,
+    },
+
+    chartLegendText: {
+        fontSize: 12,
+        fontFamily: 'Fredoka',
+        color: '#52366b',
     },
 });

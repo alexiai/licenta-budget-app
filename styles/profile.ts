@@ -237,7 +237,6 @@ export default StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
     },
-
     nameHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -250,7 +249,6 @@ export default StyleSheet.create({
         fontWeight: 'bold',
         color: '#52366b',
     },
-
     editButton: {
         color: '#d5790d',
         fontFamily: 'Fredoka',
@@ -276,7 +274,6 @@ export default StyleSheet.create({
         backgroundColor: '#ffe8b0',
         borderRadius: 8,
     },
-    // Adaugă la stilurile existente
     bankConnectBtn: {
         backgroundColor: '#4CAF50',
         padding: 15,
@@ -291,7 +288,6 @@ export default StyleSheet.create({
         fontWeight: 'bold',
         fontSize: 16,
     },
-
     disconnectBtn: {
         backgroundColor: '#D62828',
         padding: 16,
@@ -307,7 +303,6 @@ export default StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
     },
-
     bankBtn: {
         backgroundColor: '#D62828',
         padding: 16,
@@ -318,4 +313,115 @@ export default StyleSheet.create({
         borderColor: '#9e1e1e',
     },
 
+    // Badge Section
+    badgeSection: {
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderRadius: 20,
+        padding: 20,
+        marginHorizontal: 20,
+        marginBottom: 16,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    badgeTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#91483C',
+        marginBottom: 16,
+        fontFamily: 'Fredoka',
+        textAlign: 'center',
+    },
+    badgeStats: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        marginBottom: 20,
+    },
+    badgeStat: {
+        alignItems: 'center',
+    },
+    badgeStatNumber: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#91483C',
+        fontFamily: 'Fredoka',
+    },
+    badgeStatLabel: {
+        fontSize: 12,
+        color: '#666',
+        fontFamily: 'Fredoka',
+        marginTop: 2,
+    },
+    earnedBadgesContainer: {
+        marginBottom: 20,
+    },
+    earnedBadgesTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#91483C',
+        marginBottom: 12,
+        fontFamily: 'Fredoka',
+    },
+    upcomingBadgesContainer: {
+        marginBottom: 20,
+    },
+    upcomingBadgesTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#91483C',
+        marginBottom: 12,
+        fontFamily: 'Fredoka',
+    },
+    badgeGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+    },
+    earnedBadge: {
+        backgroundColor: '#FFF3E0',
+        borderRadius: 16,
+        padding: 12,
+        alignItems: 'center',
+        width: '30%',
+        borderWidth: 2,
+        borderColor: '#FF8F00',
+    },
+    unearnedBadge: {
+        backgroundColor: '#F5F5F5',
+        borderRadius: 16,
+        padding: 12,
+        alignItems: 'center',
+        width: '30%',
+        borderWidth: 2,
+        borderColor: '#E0E0E0',
+    },
+    badgeEmoji: {
+        fontSize: 32,
+        marginBottom: 4,
+    },
+    unearnedEmoji: {
+        opacity: 0.3,
+    },
+    badgeName: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#91483C',
+        textAlign: 'center',
+        fontFamily: 'Fredoka',
+        marginBottom: 2,
+    },
+    badgeDesc: {
+        fontSize: 10,
+        color: '#666',
+        textAlign: 'center',
+        fontFamily: 'Fredoka',
+    },
+    badgeRequirement: {
+        fontSize: 10,
+        color: '#666',
+        textAlign: 'center',
+        fontFamily: 'Fredoka',
+    },
 });

@@ -1,13 +1,29 @@
 import { View, Text, TextInput, TouchableOpacity, Switch, Alert, Image, ScrollView, ImageBackground } from 'react-native';
 import { useEffect, useState } from 'react';
-import { auth, db } from '@lib/firebase';
+import { auth, db } from '../../../lib/firebase';
 import { doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { reauthenticateWithCredential, EmailAuthProvider, updatePassword, deleteUser } from 'firebase/auth';
 import { useRouter } from 'expo-router';
-import styles from '@styles/profile';
+import styles from '../../../styles/profile';
 import bg from '@assets/bg/profilebackrground.png';
 import calendarGood from '@assets/icons/calendarGood.png';
 
+interface Badge {
+    id: string;
+    name: string;
+    emoji: string;
+    description: string;
+    requirement: number;
+    earned: boolean;
+    earnedDate?: Date;
+}
+
+interface UserProgress {
+    completedQuests: string[];
+    totalPoints: number;
+    badges: Badge[];
+    questsCompleted: number;
+}
 
 export default function MyProfileScreen() {
     const user = auth.currentUser;
@@ -19,6 +35,7 @@ export default function MyProfileScreen() {
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [appNotificationsEnabled, setAppNotificationsEnabled] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
+    const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
 
     // Password change state
     const [showPasswordChange, setShowPasswordChange] = useState(false);
@@ -28,6 +45,7 @@ export default function MyProfileScreen() {
 
     // Delete account state
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+
     interface UserData {
         name: string;
         surname: string;
@@ -49,16 +67,40 @@ export default function MyProfileScreen() {
                 setNotificationsEnabled(data.notificationsEnabled ?? true);
                 setAppNotificationsEnabled(data.appNotificationsEnabled ?? true);
             }
+
+            // Load user progress and badges
+            const progressDoc = await getDoc(doc(db, 'userProgress', user.uid));
+            if (progressDoc.exists()) {
+                const progressData = progressDoc.data();
+                setUserProgress({
+                    completedQuests: progressData.completedQuests || [],
+                    totalPoints: progressData.totalPoints || 0,
+                    badges: progressData.badges || [],
+                    questsCompleted: progressData.questsCompleted || 0
+                });
+            } else {
+                // Initialize empty progress if doesn't exist
+                setUserProgress({
+                    completedQuests: [],
+                    totalPoints: 0,
+                    badges: [],
+                    questsCompleted: 0
+                });
+            }
         };
         loadUser();
     }, [user]);
-
 
     const handleSave = async () => {
         if (!user) return;
 
         try {
             await updateDoc(doc(db, 'users', user.uid), {
+                name,
+                surname,
+                email,
+                notificationsEnabled,
+                appNotificationsEnabled,
                 bankConnected: false,
                 bankAccountId: null,
                 bankConnectedAt: null,
@@ -70,6 +112,7 @@ export default function MyProfileScreen() {
             Alert.alert('Error', 'Failed to update profile.');
         }
     };
+
     const handleDisconnectBank = async () => {
         try {
             await deleteDoc(doc(db, 'bankConnections', user.uid));
@@ -78,7 +121,6 @@ export default function MyProfileScreen() {
             Alert.alert('Error', 'Failed to disconnect bank account.');
         }
     };
-
 
     const handlePasswordChange = async () => {
         if (!user || !user.email) return;
@@ -130,6 +172,9 @@ export default function MyProfileScreen() {
         router.replace('/welcome');
     };
 
+    const earnedBadges = userProgress?.badges.filter(b => b.earned) || [];
+    const unearnedBadges = userProgress?.badges.filter(b => !b.earned) || [];
+
     return (
         <ImageBackground source={bg} style={styles.container} resizeMode="cover">
             <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -138,6 +183,57 @@ export default function MyProfileScreen() {
                 <View style={styles.avatarContainer}>
                     <Image source={calendarGood} style={styles.avatar} />
                 </View>
+
+                {/* Badge Section */}
+                {userProgress && (
+                    <View style={styles.badgeSection}>
+                        <Text style={styles.badgeTitle}>🏆 Your Achievements</Text>
+                        <View style={styles.badgeStats}>
+                            <View style={styles.badgeStat}>
+                                <Text style={styles.badgeStatNumber}>{userProgress.totalPoints}</Text>
+                                <Text style={styles.badgeStatLabel}>🥕 CarrotCoins</Text>
+                            </View>
+                            <View style={styles.badgeStat}>
+                                <Text style={styles.badgeStatNumber}>{userProgress.questsCompleted}</Text>
+                                <Text style={styles.badgeStatLabel}>Quests Completed</Text>
+                            </View>
+                            <View style={styles.badgeStat}>
+                                <Text style={styles.badgeStatNumber}>{earnedBadges.length}</Text>
+                                <Text style={styles.badgeStatLabel}>Badges Earned</Text>
+                            </View>
+                        </View>
+
+                        {earnedBadges.length > 0 && (
+                            <View style={styles.earnedBadgesContainer}>
+                                <Text style={styles.earnedBadgesTitle}>🏆 Earned Badges</Text>
+                                <View style={styles.badgeGrid}>
+                                    {earnedBadges.map((badge) => (
+                                        <View key={badge.id} style={styles.earnedBadge}>
+                                            <Text style={styles.badgeEmoji}>{badge.emoji}</Text>
+                                            <Text style={styles.badgeName}>{badge.name}</Text>
+                                            <Text style={styles.badgeDesc}>{badge.description}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+
+                        {unearnedBadges.length > 0 && (
+                            <View style={styles.upcomingBadgesContainer}>
+                                <Text style={styles.upcomingBadgesTitle}>🎯 Upcoming Badges</Text>
+                                <View style={styles.badgeGrid}>
+                                    {unearnedBadges.slice(0, 3).map((badge) => (
+                                        <View key={badge.id} style={styles.unearnedBadge}>
+                                            <Text style={[styles.badgeEmoji, styles.unearnedEmoji]}>{badge.emoji}</Text>
+                                            <Text style={styles.badgeName}>{badge.name}</Text>
+                                            <Text style={styles.badgeRequirement}>Complete {badge.requirement} quests</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+                    </View>
+                )}
 
                 <View style={styles.formContainer}>
                     <View style={styles.nameHeader}>

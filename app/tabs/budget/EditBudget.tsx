@@ -124,10 +124,10 @@ export default function EditBudget({ categories: initialCategories, incomes: ini
                 name: cat.name,
                 value: total,
                 color: baseColors[index % baseColors.length],
-                legendFontColor: '#333',
-                legendFontSize: 12,
+                legendFontColor: '#91483c',
+                legendFontSize: 13,
             };
-        }).filter(entry => entry.value > 0);
+        }).filter((entry) => entry.value > 0);
     };
 
     const totalIncome = incomes.reduce((sum, i) => sum + parseFloat(i.amount || '0'), 0);
@@ -137,6 +137,7 @@ export default function EditBudget({ categories: initialCategories, incomes: ini
 
     const chartData = getChartKitData();
     const screenWidth = Dimensions.get('window').width;
+    const totalValue = chartData.reduce((sum, e) => sum + e.value, 0);
 
     return (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 80 }}>
@@ -154,22 +155,194 @@ export default function EditBudget({ categories: initialCategories, incomes: ini
                     <Text style={budgetStyles.cardSubtitle}>Remaining</Text>
                     <Text style={budgetStyles.cardSubtitle}>${remaining}</Text>
                 </View>
-                <TouchableOpacity onPress={() => setShowChart(prev => !prev)}>
+                <TouchableOpacity onPress={() => setShowChart((prev) => !prev)}>
                     <Text style={budgetStyles.chartToggle}>Tap to show chart</Text>
                 </TouchableOpacity>
                 {showChart && (
-                    <ChartKitPie
-                        data={chartData}
-                        width={screenWidth - 40}
-                        height={180}
-                        accessor="value"
-                        backgroundColor="transparent"
-                        paddingLeft="15"
-                        absolute
-                    />
+                    totalValue > 0 ? (
+                        <View style={budgetStyles.chartContainer}>
+                            <View style={budgetStyles.pieWrapper}>
+                                <ChartKitPie
+                                    data={chartData}
+                                    width={260}
+                                    height={150}
+                                    accessor="value"
+                                    backgroundColor="transparent"
+                                    absolute
+                                    hasLegend={false}
+                                    chartConfig={{
+                                        color: () => `#000`,
+                                        labelColor: () => 'transparent',
+                                        propsForLabels: { fontSize: 0 },
+                                    }}
+                                    style={{ borderRadius: 16 }}
+                                />
+                            </View>
+                            <View style={budgetStyles.chartLegendBox}>
+                                {chartData
+                                    .sort((a, b) => b.value - a.value)
+                                    .map((item) => {
+                                        const percent = totalValue > 0 ? ((item.value / totalValue) * 100).toFixed(0) : 0;
+                                        return (
+                                            <View key={item.name} style={budgetStyles.chartLegendItem}>
+                                                <View style={[budgetStyles.colorDot, { backgroundColor: item.color }]} />
+                                                <Text style={budgetStyles.chartLegendText}>
+                                                    {item.name}:<Text style={budgetStyles.legendPercent}> {percent}%</Text>
+                                                </Text>
+                                            </View>
+                                        );
+                                    })}
+                            </View>
+                        </View>
+                    ) : (
+                        <Text style={{ textAlign: 'center', fontFamily: 'Fredoka', marginTop: 10, color: '#91483c' }}>
+                            No data to display in chart.
+                        </Text>
+                    )
                 )}
             </View>
-            ...rest of component unchanged...
+            <Text style={budgetStyles.section}>Income</Text>
+            {incomes.map((inc, i) => (
+                <View key={`income-${i}`} style={styles.itemRow}>
+                    <Feather name="menu" size={20} color="#91483c" style={styles.dragIcon} />
+                    <Image source={incomeIcon} style={styles.categoryIcon} />
+                    {inc.isOther ? (
+                        <TextInput
+                            placeholder="Other"
+                            value={inc.type}
+                            onChangeText={(val) => {
+                                const updated = [...incomes];
+                                updated[i].type = val;
+                                updateAll(categories, updated);
+                            }}
+                            style={[styles.itemText, { fontStyle: 'italic', opacity: 0.8 }]}
+                        />
+                    ) : (
+                        <Text style={styles.itemText}>{inc.type}</Text>
+                    )}
+                    <TextInput
+                        value={inc.amount}
+                        onChangeText={(val) => handleIncomeChange(i, val)}
+                        style={styles.itemAmount}
+                        keyboardType="numeric"
+                    />
+                    <TouchableOpacity onPress={() => deleteIncome(i)}>
+                        <Feather name="minus-circle" size={20} color="#91483c" />
+                    </TouchableOpacity>
+                </View>
+            ))}
+
+
+            <TouchableOpacity
+                onPress={() => setOpenDropdown(openDropdown === 'income' ? null : 'income')}
+                style={styles.addSubBtn}
+            >
+                <Text style={styles.addSubText}>+ Add Income Type</Text>
+            </TouchableOpacity>
+
+            {openDropdown === 'income' && (
+                <View style={styles.subGrid}>
+                    {predefinedIncomeTypes
+                        .filter(type => !incomes.some(inc => inc.type.startsWith(type)))
+                        .map((type, idx) => (
+                            <TouchableOpacity
+                                key={idx}
+                                onPress={() => handleAddIncome(type)}
+                                style={styles.subPill}
+                            >
+                                <Text style={styles.subPillText}>{type}</Text>
+                            </TouchableOpacity>
+                        ))}
+                </View>
+            )}
+
+            {categories.map((cat, i) => {
+                const key = categoryNameToKey[cat.name] || 'other';
+                const used = cat.subcategories.map((s) => s.name);
+                const available = (predefinedCategories[key] || []).filter((s) => !used.includes(s));
+                const dataWithIndex = cat.subcategories.map((s, j) => ({ ...s, index: j }));
+
+                return (
+                    <View key={`cat-${i}`}>
+                        <Text style={budgetStyles.section}>{cat.name}</Text>
+                        <DraggableFlatList
+                            data={dataWithIndex}
+                            keyExtractor={(item, index) => `sub-${i}-${index}`}
+                            renderItem={({ item, drag, isActive }) => (
+                                <TouchableOpacity
+                                    style={[styles.itemRow, isActive && { opacity: 0.9 }]}
+                                    onLongPress={drag}
+                                >
+                                    <Feather name="menu" size={20} color="#91483c" style={styles.dragIcon} />
+                                    <Image
+                                        source={getCategoryIcon(item.name, cat.name)}
+                                        style={styles.categoryIcon}
+                                    />
+                                    {item.isOther ? (
+                                        <TextInput
+                                            placeholder="Other"
+                                            value={item.name}
+                                            onChangeText={(val) => {
+                                                const updated = [...categories];
+                                                updated[i].subcategories[item.index].name = val;
+                                                updateAll(updated, incomes);
+                                            }}
+                                            style={[styles.itemText, { fontStyle: 'italic', opacity: 0.8 }]}
+                                        />
+                                    ) : (
+                                        <Text style={styles.itemText}>{item.name}</Text>
+                                    )}
+                                    <TextInput
+                                        value={item.amount}
+                                        onChangeText={(val) => handleAmountChange(i, item.index, val)}
+                                        style={styles.itemAmount}
+                                        keyboardType="numeric"
+                                    />
+                                    <TouchableOpacity onPress={() => deleteSub(i, item.index)}>
+                                        <Feather name="minus-circle" size={20} color="#91483c" />
+                                    </TouchableOpacity>
+                                </TouchableOpacity>
+                            )}
+                            onDragEnd={({ data }) => {
+                                const updated = [...categories];
+                                updated[i].subcategories = data.map(({ name, amount, isOther }) => ({ name, amount, isOther }));
+                                updateAll(updated, incomes);
+                            }}
+                        />
+
+                        <TouchableOpacity
+                            onPress={() => setOpenDropdown(openDropdown === i ? null : i)}
+                            style={styles.addSubBtn}
+                        >
+                            <Text style={styles.addSubText}>+ Add Subcategory</Text>
+                        </TouchableOpacity>
+
+                        {openDropdown === i && (
+                            <View style={styles.subGrid}>
+                                {available.length > 0 && available.map((name, idx) => (
+                                    <TouchableOpacity
+                                        key={idx}
+                                        onPress={() => handleAddSub(i, name)}
+                                        style={styles.subPill}
+                                    >
+                                        <Text style={styles.subPillText}>{name}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                                <TouchableOpacity
+                                    onPress={() => handleAddSub(i, 'Other')}
+                                    style={[styles.subPill, { borderStyle: 'dashed', opacity: 0.8 }]}
+                                >
+                                    <Text style={styles.subPillText}>Other</Text>
+                                </TouchableOpacity>
+                                {available.length === 0 && (
+                                    <Text style={styles.disabledText}>Every subcategory is used</Text>
+                                )}
+                            </View>
+                        )}
+                    </View>
+                );
+            })}
+
         </ScrollView>
     );
 }
