@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import {
     View,
@@ -55,16 +54,18 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
     const [editableDate, setEditableDate] = useState('');
     const [awaitingDateInput, setAwaitingDateInput] = useState(false);
     const [showImageOptions, setShowImageOptions] = useState(false);
-    const [showFeedbackForm, setShowFeedbackForm] = useState(false);
     const [feedbackSuggestions, setFeedbackSuggestions] = useState<ReceiptImprovementSuggestion[]>([]);
     const [ocrWords, setOcrWords] = useState<OCRWord[]>([]);
     const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
     const [learningTips, setLearningTips] = useState<string[]>([]);
-    const [showDeveloperAnnotations, setShowDeveloperAnnotations] = useState(false);
     const [savedReceiptId, setSavedReceiptId] = useState<string | null>(null);
-    const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
     const [showDeveloperSuggestion, setShowDeveloperSuggestion] = useState(false);
     const [developerSuggestionData, setDeveloperSuggestionData] = useState<any>(null);
+    const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+    const [feedbackQuestions, setFeedbackQuestions] = useState<any[]>([]);
+    const [userFeedbackData, setUserFeedbackData] = useState<any>({});
+    const [showDeveloperAnnotations, setShowDeveloperAnnotations] = useState(false);
+    const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
 
     const workerRef = useRef<any>(null);
 
@@ -135,64 +136,116 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
         return translatedText;
     };
 
-    const extractAmountFromText = (text: string): number | null => {
+    // Enhanced noise filtering function
+    const filterNoiseLines = (text: string): string[] => {
         const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
 
-        // Skip lines that contain these keywords (they're not actual expenses)
-        const skipKeywords = [
-            'total', 'suma', 'tva', 'plata card', 'rest', 'bon fiscal',
-            'subtotal', 'discount', 'reducere', 'casa', 'operator',
-            'data', 'ora', 'nr bon', 'cod fiscal', 'reg com'
+        // Comprehensive noise keywords for Romanian receipts
+        const noiseKeywords = [
+            'bon fiscal', 'casa nr', 'operator', 'nr bon', 'cod fiscal', 'reg com', 'cui',
+            'adresa', 'telefon', 'tva', 'subtotal', 'rest', 'plata card', 'card',
+            'data', 'ora', 'timp', 'mulțumim', 'multumim', 'la revedere',
+            'punct de lucru', 'unitate', 'serie', 'numar', 'ziua', 'luna'
         ];
+
+        return lines.filter(line => {
+            const lowerLine = line.toLowerCase();
+
+            // Skip noise keyword lines
+            if (noiseKeywords.some(keyword => lowerLine.includes(keyword))) {
+                return false;
+            }
+
+            // Skip very short lines (usually IDs or codes)
+            if (line.length < 4) {
+                return false;
+            }
+
+            // Skip lines that are just numbers or codes
+            if (/^\d+$/.test(line) || /^[A-Z0-9]{4,}$/.test(line)) {
+                return false;
+            }
+
+            // Skip time patterns
+            if (/^\d{2}:\d{2}(:\d{2})?$/.test(line)) {
+                return false;
+            }
+
+            return true;
+        });
+    };
+
+    const extractAmountFromText = (text: string): number | null => {
+        const cleanLines = filterNoiseLines(text);
+        console.log(`📝 Filtered ${text.split('\n').length} lines down to ${cleanLines.length} clean lines`);
 
         let totalAmount = 0;
         let foundItems = false;
+        let maxSingleAmount = 0;
 
-        for (const line of lines) {
+        for (const line of cleanLines) {
             const lowerLine = line.toLowerCase();
 
-            // Skip lines with excluded keywords
-            if (skipKeywords.some(keyword => lowerLine.includes(keyword))) {
-                continue;
+            // Look for total keywords first (high priority)
+            if (/total|suma|plata/i.test(line)) {
+                const totalMatch = line.match(/(\d+[.,]\d{2})/);
+                if (totalMatch) {
+                    const total = parseFloat(totalMatch[1].replace(',', '.'));
+                    if (total > 0 && total < 10000) {
+                        console.log(`💰 Found explicit total: ${total}`);
+                        return total;
+                    }
+                }
             }
 
             // Romanian receipt format 1: "Paine alba     3x6.00     18.00"
-            // Extract the rightmost number which is the total for that item
             const format1Match = line.match(/^(.+?)\s+\d+\s*x\s*\d+[.,]\d{2}\s+(\d+[.,]\d{2})$/);
             if (format1Match) {
                 const itemTotal = parseFloat(format1Match[2].replace(',', '.'));
-                if (!isNaN(itemTotal)) {
+                if (!isNaN(itemTotal) && itemTotal > 0) {
                     totalAmount += itemTotal;
                     foundItems = true;
+                    maxSingleAmount = Math.max(maxSingleAmount, itemTotal);
                 }
                 continue;
             }
 
-            // Romanian receipt format 2: Product name on separate line from quantity/price
-            // "3 x 6.00" followed by "Paine alba       18.00"
-            // Look for lines ending with a price
-            const format2Match = line.match(/^(.+?)\s+(\d+[.,]\d{2})$/);
-            if (format2Match && !lowerLine.match(/^\d+\s*x/)) {
-                const itemTotal = parseFloat(format2Match[2].replace(',', '.'));
-                if (!isNaN(itemTotal)) {
-                    totalAmount += itemTotal;
+            // Product line with price at end
+            const productMatch = line.match(/^(.+?)\s+(\d+[.,]\d{2})$/);
+            if (productMatch && productMatch[1].length > 3) {
+                const price = parseFloat(productMatch[2].replace(',', '.'));
+                if (!isNaN(price) && price > 0 && price < 1000) {
+                    totalAmount += price;
                     foundItems = true;
+                    maxSingleAmount = Math.max(maxSingleAmount, price);
                 }
                 continue;
             }
 
-            // Simple format: just product and price
-            const simplePriceMatch = line.match(/(\d+[.,]\d{2})$/);
-            if (simplePriceMatch && !lowerLine.match(/^\d+\s*x/) && lowerLine.length > 10) {
-                const itemTotal = parseFloat(simplePriceMatch[1].replace(',', '.'));
-                if (!isNaN(itemTotal) && itemTotal > 0 && itemTotal < 10000) { // reasonable price range
-                    totalAmount += itemTotal;
-                    foundItems = true;
+            // Simple price pattern
+            const simplePriceMatch = line.match(/(\d+[.,]\d{2})/);
+            if (simplePriceMatch && line.length > 5) {
+                const price = parseFloat(simplePriceMatch[1].replace(',', '.'));
+                if (price > 0 && price < 1000) {
+                    maxSingleAmount = Math.max(maxSingleAmount, price);
                 }
             }
         }
 
-        return foundItems ? totalAmount : null;
+        // If we found itemized amounts, return total
+        if (foundItems && totalAmount > 0) {
+            console.log(`💰 Calculated total from items: ${totalAmount}`);
+            return totalAmount;
+        }
+
+        // Fallback to largest reasonable amount
+        if (maxSingleAmount > 0) {
+            console.log(`💰 Using largest amount as fallback: ${maxSingleAmount}`);
+            return maxSingleAmount;
+        }
+
+        console.log('💰 No amount found');
+        return null;
     };
 
     const extractDateFromText = (text: string): string | null => {
@@ -262,14 +315,28 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
             const ocrText = data.text;
             const confidence = data.confidence;
 
-            // Extract words with spatial information
-            const words: OCRWord[] = data.words
-                .filter((word: any) => word.text.trim().length > 0)
-                .map((word: any) => ({
-                    text: word.text,
-                    confidence: word.confidence,
-                    bbox: word.bbox
-                }));
+            // Extract words with spatial information (handle undefined data.words)
+            const words: OCRWord[] = [];
+            console.log('📊 OCR data structure:', {
+                hasWords: !!data.words,
+                wordsType: typeof data.words,
+                isArray: Array.isArray(data.words),
+                dataKeys: Object.keys(data)
+            });
+
+            if (data.words && Array.isArray(data.words)) {
+                data.words
+                    .filter((word: any) => word && word.text && word.text.trim().length > 0)
+                    .forEach((word: any) => {
+                        words.push({
+                            text: word.text,
+                            confidence: word.confidence || 0,
+                            bbox: word.bbox || { x0: 0, y0: 0, x1: 0, y1: 0 }
+                        });
+                    });
+            } else {
+                console.log('⚠️ No spatial word data available, using fallback extraction');
+            }
 
             setOcrWords(words);
 
@@ -281,13 +348,27 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
             console.log(`📝 OCR Results: "${ocrText}" (confidence: ${confidence}%)`);
             console.log(`📊 Extracted ${words.length} words with spatial data`);
 
-            // Use intelligent extraction system
-            const intelligentResults = receiptLearningSystem.extractReceiptData(
-                words,
-                imageWidth,
-                imageHeight,
-                ocrText
-            );
+            // Use intelligent extraction system or fallback
+            let intelligentResults;
+            if (words.length > 0) {
+                intelligentResults = receiptLearningSystem.extractReceiptData(
+                    words,
+                    imageWidth,
+                    imageHeight,
+                    ocrText
+                );
+            } else {
+                // Fallback extraction when spatial data is not available
+                console.log('📋 Using fallback extraction (no spatial data)');
+                intelligentResults = {
+                    amount: extractAmountFromText(ocrText),
+                    date: extractDateFromText(ocrText),
+                    merchant: null,
+                    confidence: confidence,
+                    layout: null,
+                    similarPatterns: []
+                };
+            }
 
             // Check for similar receipts and apply learned patterns
             const user = auth.currentUser;
@@ -374,13 +455,143 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
 
         } catch (error) {
             console.error('🚨 Enhanced OCR Error:', error);
-            Alert.alert('OCR Error', 'Failed to process the image. Please try again.');
+
+            // When OCR completely fails, still create extractedData with empty values
+            // so the user can fill in everything manually
+            const failedExtractedData: ExtractedData = {
+                amount: undefined,
+                date: undefined,
+                category: undefined,
+                subcategory: undefined,
+                rawText: 'OCR_FAILED',
+                confidence: 0,
+                merchantName: undefined,
+                layout: undefined,
+                words: [],
+                imageWidth: 1000,
+                imageHeight: 1200
+            };
+
+            setExtractedData(failedExtractedData);
+            setEditableAmount('');
+            setEditableDate('');
+            setAwaitingDateInput(true); // Force user to enter date
+
+            // Save the failed attempt for learning
+            try {
+                console.log('💾 Saving failed OCR attempt for learning...');
+                const user = auth.currentUser;
+                if (user) {
+                    const failedMetadata = receiptStorageSystem.createMetadataFromOCR(
+                        'OCR_FAILED',
+                        failedExtractedData,
+                        null,
+                        { ocrFailed: true, error: error.message }
+                    );
+
+                    const savedReceipt = await receiptStorageSystem.saveReceiptWithMetadata(
+                        imageUri,
+                        {
+                            ...failedMetadata,
+                            receiptQuality: 'poor'
+                        }
+                    );
+
+                    setSavedReceiptId(savedReceipt.firestoreId);
+                    console.log('💾 Failed OCR attempt saved with ID:', savedReceipt.id);
+                }
+            } catch (saveError) {
+                console.error('Failed to save OCR failure:', saveError);
+            }
+
+            // Show confirmation form so user can enter ALL data manually
+            setShowConfirmation(true);
+
+            // Show alert explaining what happened
+            Alert.alert(
+                'OCR Failed',
+                'I couldn\'t read this receipt at all. Please enter the amount and date manually, then I\'ll save it and learn from this failure.',
+                [{ text: 'OK' }]
+            );
         } finally {
             setIsProcessing(false);
         }
     };
 
-    const saveExpense = async () => {
+    const handleSubmitFeedback = async () => {
+        try {
+            console.log('📝 Submitting user feedback for OCR improvement...');
+
+            const user = auth.currentUser;
+            if (!user) return;
+
+            // Save feedback for learning
+            await receiptFeedbackSystem.saveFeedback(
+                selectedImage || '',
+                extractedData?.rawText || 'OCR_FAILED',
+                extractedData || {},
+                userFeedbackData,
+                {
+                    whatWentWrong: 'OCR extraction failed',
+                    merchantName: userFeedbackData.merchant,
+                    additionalTips: userFeedbackData.quality_issue
+                },
+                user.uid
+            );
+
+            // If user provided amount and date, create expense and save data
+            if (userFeedbackData.amount && userFeedbackData.date) {
+                const amount = parseFloat(userFeedbackData.amount);
+                const date = userFeedbackData.date;
+
+                // Save expense to expenses collection
+                const expenseData = {
+                    userId: user.uid,
+                    amount: amount,
+                    category: 'Other',
+                    subcategory: 'Miscellaneous',
+                    note: `Receipt scan - ${userFeedbackData.merchant || 'Manual entry'}`,
+                    date: new Date(date + 'T12:00:00.000Z').toISOString(),
+                    createdAt: new Date().toISOString(),
+                    currency: 'RON',
+                    source: 'receipt_scanner_manual',
+                    receiptId: savedReceiptId // Link to the saved receipt
+                };
+
+                await addDoc(collection(db, 'expenses'), expenseData);
+
+                console.log('💰 Expense created from user feedback:', {
+                    amount,
+                    date,
+                    merchant: userFeedbackData.merchant
+                });
+
+                Alert.alert(
+                    'Success!',
+                    `Expense of ${amount} RON saved successfully! Your feedback will help improve receipt recognition.`,
+                    [{ text: 'OK', onPress: () => {
+                            setShowFeedbackForm(false);
+                            resetScanner();
+                        }}]
+                );
+            } else {
+                Alert.alert(
+                    'Thank You!',
+                    'Your feedback will help improve receipt recognition.',
+                    [{ text: 'OK', onPress: () => {
+                            setShowFeedbackForm(false);
+                            resetScanner();
+                        }}]
+                );
+            }
+
+        } catch (error) {
+            console.error('Error submitting feedback:', error);
+            Alert.alert('Error', 'Failed to save feedback. Please try again.');
+        }
+    };
+
+    const handleSaveExpense = async () => {
         if (!extractedData || !editableAmount || !selectedImage) {
             Alert.alert('Missing Data', 'Please ensure amount is provided.');
             return;
@@ -396,11 +607,21 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
             const finalDate = editableDate || new Date().toISOString().split('T')[0];
             const expenseDate = new Date(finalDate + 'T12:00:00.000Z');
 
-            // Prepare user corrections
+            // Prepare user corrections (handle case where OCR completely failed)
+            const originalAmount = extractedData.amount || 0;
+            const originalDate = extractedData.date || '';
+
             const userCorrections = {
-                amount: parseFloat(editableAmount) !== extractedData.amount ? parseFloat(editableAmount) : undefined,
-                date: editableDate !== extractedData.date ? editableDate : undefined
+                amount: parseFloat(editableAmount) !== originalAmount ? parseFloat(editableAmount) : undefined,
+                date: editableDate !== originalDate ? editableDate : undefined
             };
+
+            // If OCR failed completely, mark as corrected since user had to enter everything
+            const ocrFailed = extractedData.rawText === 'OCR_FAILED';
+            if (ocrFailed) {
+                userCorrections.amount = parseFloat(editableAmount);
+                userCorrections.date = editableDate;
+            }
 
             // Create metadata for receipt storage
             const metadata = receiptStorageSystem.createMetadataFromOCR(
@@ -413,6 +634,21 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
                 Object.keys(userCorrections).some(key => userCorrections[key as keyof typeof userCorrections] !== undefined) ? userCorrections : null
             );
 
+            // Debug: Show what data will be stored
+            console.log('📊 Metadata to be saved:', {
+                receiptType: metadata.receiptType,
+                extractedData: metadata.extractedData,
+                userCorrections: metadata.userCorrections,
+                wasCorrected: metadata.wasCorrected,
+                ocrConfidence: metadata.ocrConfidence,
+                receiptQuality: metadata.receiptQuality,
+                products: metadata.products,
+                layoutInfo: {
+                    dateLocation: metadata.dateLocation,
+                    amountLocation: metadata.amountLocation
+                }
+            });
+
             // Save receipt with structured metadata
             const savedReceipt = await receiptStorageSystem.saveReceiptWithMetadata(
                 selectedImage,
@@ -420,6 +656,18 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
             );
 
             setSavedReceiptId(savedReceipt.firestoreId);
+
+            console.log('💾 Receipt data saved:', {
+                receiptId: savedReceipt.id,
+                firestoreId: savedReceipt.firestoreId,
+                imageUrl: savedReceipt.imageUrl,
+                metadata: {
+                    type: metadata.receiptType,
+                    wasCorrected: metadata.wasCorrected,
+                    confidence: metadata.ocrConfidence,
+                    quality: metadata.receiptQuality
+                }
+            });
 
             console.log('📦 Receipt saved with metadata:', {
                 id: savedReceipt.id,
@@ -445,7 +693,7 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
             await addDoc(collection(db, 'expenses'), expenseData);
 
             // Save successful pattern for learning (existing logic)
-            if (extractedData.words) {
+            if (extractedData.words && extractedData.words.length > 0) {
                 receiptLearningSystem.saveSuccessfulPattern(
                     extractedData.rawText,
                     selectedImage,
@@ -453,8 +701,8 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
                     extractedData.imageWidth || 1000,
                     extractedData.imageHeight || 1200,
                     {
-                        amount: extractedData.amount,
-                        date: extractedData.date,
+                        amount: parseFloat(editableAmount),
+                        date: finalDate,
                         category: extractedData.category,
                         subcategory: extractedData.subcategory
                     },
@@ -503,45 +751,6 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
         } catch (error) {
             console.error('Error saving expense:', error);
             Alert.alert('Error', 'Failed to save expense. Please try again.');
-        }
-    };
-
-    const handleSubmitFeedback = async () => {
-        if (!extractedData || !selectedImage) return;
-
-        const user = auth.currentUser;
-        if (!user) return;
-
-        try {
-            // Collect feedback data (simplified - in real implementation you'd collect form data)
-            const userFeedback = {
-                whatWentWrong: 'OCR extraction had low confidence',
-                whereWasAmount: 'Unknown',
-                whereWasDate: 'Unknown',
-                merchantName: extractedData.merchantName || 'Unknown',
-                receiptType: extractedData.category || 'Unknown',
-                additionalTips: 'User provided feedback through form'
-            };
-
-            const userCorrections = {
-                amount: parseFloat(editableAmount) !== extractedData.amount ? parseFloat(editableAmount) : undefined,
-                date: editableDate !== extractedData.date ? editableDate : undefined
-            };
-
-            await receiptFeedbackSystem.saveFeedback(
-                selectedImage,
-                extractedData.rawText,
-                extractedData,
-                userCorrections,
-                userFeedback,
-                user.uid
-            );
-
-            setShowFeedbackForm(false);
-            Alert.alert('Thank you!', 'Your feedback will help improve future receipt scanning.');
-        } catch (error) {
-            console.error('Error submitting feedback:', error);
-            Alert.alert('Error', 'Failed to submit feedback.');
         }
     };
 
@@ -645,16 +854,24 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
                                 <View style={styles.dataRow}>
                                     <Text style={styles.dataLabel}>Category:</Text>
                                     <Text style={styles.dataValue}>
-                                        {extractedData.category || 'Not detected'}
+                                        {extractedData.category || (extractedData.rawText === 'OCR_FAILED' ? 'Will be detected from manual input' : 'Not detected')}
                                     </Text>
                                 </View>
 
                                 <View style={styles.dataRow}>
                                     <Text style={styles.dataLabel}>Subcategory:</Text>
                                     <Text style={styles.dataValue}>
-                                        {extractedData.subcategory || 'Not detected'}
+                                        {extractedData.subcategory || (extractedData.rawText === 'OCR_FAILED' ? 'Will be detected from manual input' : 'Not detected')}
                                     </Text>
                                 </View>
+
+                                {extractedData.rawText === 'OCR_FAILED' && (
+                                    <View style={styles.warningContainer}>
+                                        <Text style={styles.warningText}>
+                                            ⚠️ OCR completely failed. Please enter amount and date manually. The AI will learn from this failure.
+                                        </Text>
+                                    </View>
+                                )}
 
                                 {awaitingDateInput && !editableDate && (
                                     <Text style={styles.warningText}>
@@ -705,7 +922,7 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
                                             styles.saveButton,
                                             (!editableAmount || !editableDate) && styles.saveButtonDisabled
                                         ]}
-                                        onPress={saveExpense}
+                                        onPress={handleSaveExpense}
                                         disabled={!editableAmount || !editableDate}
                                     >
                                         <Text style={styles.saveButtonText}>Save Expense</Text>
@@ -888,6 +1105,94 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
                     }}
                 />
             )}
+
+            {/* User Feedback Form for Failed OCR */}
+            <Modal
+                visible={showFeedbackForm}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setShowFeedbackForm(false)}
+            >
+                <View style={styles.feedbackContainer}>
+                    <View style={styles.feedbackHeader}>
+                        <Text style={styles.feedbackTitle}>🤔 Help AI Learn</Text>
+                        <TouchableOpacity onPress={() => setShowFeedbackForm(false)}>
+                            <Ionicons name="close" size={24} color="#666" />
+                        </TouchableOpacity>
+                    </View>
+
+                    <ScrollView style={styles.feedbackContent}>
+                        <Text style={styles.feedbackSubtitle}>
+                            Your feedback helps the AI understand receipts better for future scans.
+                        </Text>
+
+                        {feedbackQuestions.map((section, sectionIndex) => (
+                            <View key={sectionIndex} style={styles.feedbackSection}>
+                                <Text style={styles.feedbackMessage}>{section.message}</Text>
+
+                                {section.questions?.map((question: any) => (
+                                    <View key={question.id} style={styles.questionContainer}>
+                                        <Text style={styles.questionText}>{question.question}</Text>
+
+                                        {question.type === 'text' && (
+                                            <TextInput
+                                                style={styles.questionInput}
+                                                value={userFeedbackData[question.id] || ''}
+                                                onChangeText={(text) => setUserFeedbackData(prev => ({
+                                                    ...prev,
+                                                    [question.id]: text
+                                                }))}
+                                                placeholder="Enter answer..."
+                                            />
+                                        )}
+
+                                        {question.type === 'select' && question.options && (
+                                            <View style={styles.optionsContainer}>
+                                                {question.options.map((option: string) => (
+                                                    <TouchableOpacity
+                                                        key={option}
+                                                        style={[
+                                                            styles.optionButton,
+                                                            userFeedbackData[question.id] === option && styles.optionButtonSelected
+                                                        ]}
+                                                        onPress={() => setUserFeedbackData(prev => ({
+                                                            ...prev,
+                                                            [question.id]: option
+                                                        }))}
+                                                    >
+                                                        <Text style={[
+                                                            styles.optionText,
+                                                            userFeedbackData[question.id] === option && styles.optionTextSelected
+                                                        ]}>
+                                                            {option}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        )}
+                                    </View>
+                                ))}
+                            </View>
+                        ))}
+
+                        <View style={styles.feedbackButtons}>
+                            <TouchableOpacity
+                                style={styles.skipButton}
+                                onPress={() => setShowFeedbackForm(false)}
+                            >
+                                <Text style={styles.skipButtonText}>Skip for Now</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.submitButton}
+                                onPress={handleSubmitFeedback}
+                            >
+                                <Text style={styles.submitButtonText}>Submit Feedback</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </ScrollView>
+                </View>
+            </Modal>
         </ImageBackground>
     );
 }
@@ -1041,6 +1346,14 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginVertical: 10,
         fontFamily: 'Fredoka',
+    },
+    warningContainer: {
+        backgroundColor: '#FFF3E0',
+        borderRadius: 12,
+        padding: 16,
+        marginVertical: 12,
+        borderLeftWidth: 4,
+        borderLeftColor: '#FF6B47',
     },
     buttonRow: {
         flexDirection: 'row',
@@ -1353,5 +1666,118 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: '600',
         fontFamily: 'Fredoka',
+    },
+
+    // Feedback Form Styles
+    feedbackContainer: {
+        flex: 1,
+        backgroundColor: '#f5f5f5',
+    },
+    feedbackHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        paddingTop: 60,
+        backgroundColor: '#91483C',
+    },
+    feedbackTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: 'white',
+    },
+    feedbackContent: {
+        flex: 1,
+        padding: 16,
+    },
+    feedbackSubtitle: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    feedbackSection: {
+        backgroundColor: 'white',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 16,
+    },
+    feedbackMessage: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 16,
+    },
+    questionContainer: {
+        marginBottom: 16,
+    },
+    questionText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#333',
+        marginBottom: 8,
+    },
+    questionInput: {
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        backgroundColor: '#f9f9f9',
+    },
+    optionsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    optionButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        backgroundColor: '#f9f9f9',
+    },
+    optionButtonSelected: {
+        backgroundColor: '#91483C',
+        borderColor: '#91483C',
+    },
+    optionText: {
+        fontSize: 12,
+        color: '#666',
+    },
+    optionTextSelected: {
+        color: 'white',
+        fontWeight: '600',
+    },
+    feedbackButtons: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 20,
+        marginBottom: 40,
+    },
+    skipButton: {
+        flex: 1,
+        padding: 16,
+        borderRadius: 12,
+        backgroundColor: '#f0f0f0',
+        alignItems: 'center',
+    },
+    skipButtonText: {
+        fontSize: 16,
+        color: '#666',
+        fontWeight: '600',
+    },
+    submitButton: {
+        flex: 2,
+        padding: 16,
+        borderRadius: 12,
+        backgroundColor: '#91483C',
+        alignItems: 'center',
+    },
+    submitButtonText: {
+        fontSize: 16,
+        color: 'white',
+        fontWeight: '600',
     },
 });

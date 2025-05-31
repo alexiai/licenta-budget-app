@@ -66,8 +66,8 @@ export class ReceiptLearningSystem {
     private merchantPatterns: MerchantPattern[] = [];
 
     constructor() {
-        this.loadFromStorage();
         this.initializeMerchantPatterns();
+        this.loadFromStorage(); // Don't await here, let it load async
     }
 
     private initializeMerchantPatterns() {
@@ -480,18 +480,94 @@ export class ReceiptLearningSystem {
     }
 
     private findAmountInRegion(priceWords: any[], region: ReceiptRegion): number | null {
-        // Implementation for finding amount in specific region
-        return null; // Simplified for space
+        const regionCenter = {
+            x: region.x + region.width / 2,
+            y: region.y + region.height / 2
+        };
+
+        // Find price words within or near the specified region
+        const candidatePrices = priceWords
+            .filter((priceInfo: any) => {
+                const wordCenter = {
+                    x: (priceInfo.word.bbox.x0 + priceInfo.word.bbox.x1) / 2,
+                    y: (priceInfo.word.bbox.y0 + priceInfo.word.bbox.y1) / 2
+                };
+
+                // Check if word is within region bounds (with some tolerance)
+                const tolerance = 0.1; // 10% tolerance
+                const withinX = Math.abs(wordCenter.x - regionCenter.x) <= (region.width / 2 + tolerance);
+                const withinY = Math.abs(wordCenter.y - regionCenter.y) <= (region.height / 2 + tolerance);
+
+                return withinX && withinY;
+            })
+            .map((priceInfo: any) => parseFloat(priceInfo.word.text.replace(',', '.')))
+            .filter(price => price > 0 && price < 10000);
+
+        // Return the largest reasonable amount in the region
+        return candidatePrices.length > 0 ? Math.max(...candidatePrices) : null;
     }
 
     private findDateInRegion(dateWords: any[], region: ReceiptRegion): string | null {
-        // Implementation for finding date in specific region
-        return null; // Simplified for space
+        const regionCenter = {
+            x: region.x + region.width / 2,
+            y: region.y + region.height / 2
+        };
+
+        // Find date words within the specified region
+        const candidateDates = dateWords.filter((dateInfo: any) => {
+            const wordCenter = {
+                x: (dateInfo.word.bbox.x0 + dateInfo.word.bbox.x1) / 2,
+                y: (dateInfo.word.bbox.y0 + dateInfo.word.bbox.y1) / 2
+            };
+
+            // Check if word is within region bounds
+            const tolerance = 0.15; // 15% tolerance for dates
+            const withinX = Math.abs(wordCenter.x - regionCenter.x) <= (region.width / 2 + tolerance);
+            const withinY = Math.abs(wordCenter.y - regionCenter.y) <= (region.height / 2 + tolerance);
+
+            return withinX && withinY;
+        });
+
+        // Return the most confident date in the region
+        if (candidateDates.length > 0) {
+            const bestDate = candidateDates.sort((a: any, b: any) => b.confidence - a.confidence)[0];
+            return this.validateAndFormatDate(bestDate.word.text);
+        }
+
+        return null;
     }
 
-    private getExpectedAmountRegion(merchant: MerchantPattern): any {
-        // Return expected region based on merchant patterns
-        return null; // Simplified for space
+    private getExpectedAmountRegion(merchant: MerchantPattern): ReceiptRegion {
+        // Return expected region based on merchant layout patterns
+        const layoutFeatures = merchant.layoutFeatures;
+
+        switch (layoutFeatures.totalUsuallyAt) {
+            case 'top':
+                return {
+                    name: 'top_amount',
+                    x: 0.5,
+                    y: 0.0,
+                    width: 0.5,
+                    height: 0.3
+                };
+            case 'middle':
+                return {
+                    name: 'middle_amount',
+                    x: 0.5,
+                    y: 0.35,
+                    width: 0.5,
+                    height: 0.3
+                };
+            case 'bottom':
+            default:
+                return {
+                    name: 'bottom_amount',
+                    x: 0.5,
+                    y: 0.7,
+                    width: 0.5,
+                    height: 0.3
+                };
+        }
     }
 
     private validateAndFormatDate(dateText: string): string | null {
@@ -532,24 +608,29 @@ export class ReceiptLearningSystem {
         return null;
     }
 
-    private loadFromStorage() {
+    private async loadFromStorage() {
         try {
-            const saved = localStorage.getItem('receiptLearningPatterns');
+            // Use AsyncStorage for React Native
+            const AsyncStorage = await import('@react-native-async-storage/async-storage').then(m => m.default);
+            const saved = await AsyncStorage.getItem('receiptLearningPatterns');
             if (saved) {
                 this.patterns = JSON.parse(saved);
                 console.log(`📚 Loaded ${this.patterns.length} learning patterns`);
             }
         } catch (error) {
-            console.error('Error loading patterns:', error);
+            console.log('Learning patterns storage not available, using memory only');
+            this.patterns = [];
         }
     }
 
-    private saveToStorage() {
+    private async saveToStorage() {
         try {
-            localStorage.setItem('receiptLearningPatterns', JSON.stringify(this.patterns));
+            // Use AsyncStorage for React Native
+            const AsyncStorage = await import('@react-native-async-storage/async-storage').then(m => m.default);
+            await AsyncStorage.setItem('receiptLearningPatterns', JSON.stringify(this.patterns));
             console.log(`💾 Saved ${this.patterns.length} learning patterns`);
         } catch (error) {
-            console.error('Error saving patterns:', error);
+            console.log('Learning patterns storage not available, patterns exist only in memory');
         }
     }
 

@@ -166,7 +166,8 @@ export class ReceiptStorageSystem {
         receiptAnalysis: any = {}
     ): Omit<ReceiptMetadata, 'imageId' | 'timestamp' | 'userId'> {
         const wasCorrected = Boolean(userCorrections && Object.keys(userCorrections).length > 0);
-        const wasConfirmed = true; // If we're saving, user confirmed
+        const wasConfirmed = !receiptAnalysis.ocrFailed; // OCR failures need user confirmation
+        const ocrFailed = receiptAnalysis.ocrFailed || false;
 
         // Determine receipt type from content
         const receiptType = this.determineReceiptType(ocrText, extractedData);
@@ -194,7 +195,7 @@ export class ReceiptStorageSystem {
             wasConfirmed,
             ocrConfidence: extractedData.confidence || 0,
             ocrText,
-            receiptQuality: this.assessReceiptQuality(extractedData.confidence, wasCorrected),
+            receiptQuality: this.assessReceiptQuality(extractedData.confidence, wasCorrected, receiptAnalysis.ocrFailed),
             layoutNotes: this.generateLayoutNotes(layoutAnalysis, receiptType)
         };
     }
@@ -265,7 +266,8 @@ export class ReceiptStorageSystem {
         return products;
     }
 
-    private assessReceiptQuality(confidence: number, wasCorrected: boolean): ReceiptMetadata['receiptQuality'] {
+    private assessReceiptQuality(confidence: number, wasCorrected: boolean, ocrFailed: boolean = false): ReceiptMetadata['receiptQuality'] {
+        if (ocrFailed || confidence === 0) return 'poor';
         if (confidence >= 90 && !wasCorrected) return 'excellent';
         if (confidence >= 75 && !wasCorrected) return 'good';
         if (confidence >= 60 || (confidence >= 50 && wasCorrected)) return 'fair';
