@@ -21,6 +21,11 @@ import { findCategoryByProduct } from '../../../../lib/productAssociation';
 import { romanianToEnglish } from '../../../../lib/translationDictionary';
 import { addDoc, collection } from 'firebase/firestore';
 import { auth, db } from '../../../../lib/firebase';
+import { receiptLearningSystem, OCRWord } from '../../../../lib/receiptLearning';
+import { receiptFeedbackSystem, ReceiptImprovementSuggestion } from '../../../../lib/receiptFeedback';
+import { receiptStorageSystem } from '../../../../lib/receiptStorage';
+import { DeveloperAnnotationModal } from '../../../../lib/developerAnnotations';
+import { receiptMatchingSystem, MatchResult } from '../../../../lib/receiptMatching';
 import bg from '@assets/bg/AIback.png';
 
 interface ExtractedData {
@@ -30,6 +35,11 @@ interface ExtractedData {
     subcategory?: string;
     rawText: string;
     confidence: number;
+    merchantName?: string;
+    layout?: any;
+    words?: OCRWord[];
+    imageWidth?: number;
+    imageHeight?: number;
 }
 
 interface ReceiptScannerProps {
@@ -45,6 +55,16 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
     const [editableDate, setEditableDate] = useState('');
     const [awaitingDateInput, setAwaitingDateInput] = useState(false);
     const [showImageOptions, setShowImageOptions] = useState(false);
+    const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+    const [feedbackSuggestions, setFeedbackSuggestions] = useState<ReceiptImprovementSuggestion[]>([]);
+    const [ocrWords, setOcrWords] = useState<OCRWord[]>([]);
+    const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+    const [learningTips, setLearningTips] = useState<string[]>([]);
+    const [showDeveloperAnnotations, setShowDeveloperAnnotations] = useState(false);
+    const [savedReceiptId, setSavedReceiptId] = useState<string | null>(null);
+    const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
+    const [showDeveloperSuggestion, setShowDeveloperSuggestion] = useState(false);
+    const [developerSuggestionData, setDeveloperSuggestionData] = useState<any>(null);
 
     const workerRef = useRef<any>(null);
 
@@ -220,49 +240,140 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
     const processImage = async (imageUri: string) => {
         setIsProcessing(true);
         setExtractedData(null);
+        setLearningTips(receiptFeedbackSystem.generateImprovementTips());
 
         try {
+            console.log('🚀 Starting intelligent OCR processing...');
+
             if (!workerRef.current) {
-                workerRef.current = await createWorker();
-                await workerRef.current.loadLanguage('eng+ron');
-                await workerRef.current.initialize('eng+ron');
+                console.log('🤖 Initializing enhanced Tesseract worker...');
+                workerRef.current = await createWorker(['eng', 'ron']);
+
+                // Enhanced parameters for receipt scanning
+                await workerRef.current.setParameters({
+                    tessedit_pageseg_mode: '6',
+                    tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĂÂÎȘȚăâîșț.,:-+/\\ ()€$',
+                    preserve_interword_spaces: '1'
+                });
             }
 
-            const { data: { text } } = await workerRef.current.recognize(imageUri);
-            console.log('OCR Result:', text);
+            // Get detailed OCR results including word positions
+            const { data } = await workerRef.current.recognize(imageUri);
+            const ocrText = data.text;
+            const confidence = data.confidence;
+
+            // Extract words with spatial information
+            const words: OCRWord[] = data.words
+                .filter((word: any) => word.text.trim().length > 0)
+                .map((word: any) => ({
+                    text: word.text,
+                    confidence: word.confidence,
+                    bbox: word.bbox
+                }));
+
+            setOcrWords(words);
+
+            // Get image dimensions (simplified - in real implementation you'd get actual dimensions)
+            const imageWidth = 1000;
+            const imageHeight = 1200;
+            setImageSize({ width: imageWidth, height: imageHeight });
+
+            console.log(`📝 OCR Results: "${ocrText}" (confidence: ${confidence}%)`);
+            console.log(`📊 Extracted ${words.length} words with spatial data`);
+
+            // Use intelligent extraction system
+            const intelligentResults = receiptLearningSystem.extractReceiptData(
+                words,
+                imageWidth,
+                imageHeight,
+                ocrText
+            );
+
+            // Check for similar receipts and apply learned patterns
+            const user = auth.currentUser;
+            let enhancedResults = intelligentResults;
+            let currentMatchResult: MatchResult | null = null;
+
+            if (user) {
+                console.log('🔍 Checking for similar receipt patterns...');
+                currentMatchResult = await receiptMatchingSystem.findSimilarReceipts(
+                    ocrText,
+                    {
+                        ...intelligentResults,
+                        rawText: ocrText,
+                        confidence: confidence
+                    },
+                    user.uid
+                );
+
+                setMatchResult(currentMatchResult);
+
+                if (currentMatchResult.isMatch) {
+                    console.log(`🎯 Found matching pattern with ${currentMatchResult.confidence}% confidence`);
+                    enhancedResults = receiptMatchingSystem.applyLearnedRules(
+                        intelligentResults,
+                        currentMatchResult
+                    );
+                }
+
+                // Check for developer suggestions (dev mode only)
+                if (__DEV__) {
+                    const devSuggestions = await receiptMatchingSystem.getDeveloperSuggestions(
+                        currentMatchResult,
+                        user.uid
+                    );
+
+                    if (devSuggestions.showSuggestion) {
+                        setDeveloperSuggestionData(devSuggestions.suggestionData);
+                        console.log('💡 Developer suggestion available for layout matching');
+                    }
+                }
+            }
 
             // Translate Romanian text to English for better category detection
-            const translatedText = await translateText(text);
-            const combinedText = text + ' ' + translatedText;
-
-            // Extract data from OCR text
-            const amount = extractAmountFromText(combinedText);
-            const date = extractDateFromText(text);
+            const translatedText = await translateText(ocrText);
+            const combinedText = ocrText + ' ' + translatedText;
 
             // Detect category using existing logic
             const categoryMatch = findCategoryByProduct(combinedText.toLowerCase());
 
             const extracted: ExtractedData = {
-                amount: amount || undefined,
-                date: date || undefined,
+                amount: enhancedResults.amount || undefined,
+                date: enhancedResults.date || undefined,
                 category: categoryMatch?.category,
                 subcategory: categoryMatch?.subcategory,
-                rawText: text,
-                confidence: categoryMatch?.confidence || 0
+                rawText: ocrText,
+                confidence: enhancedResults.confidence,
+                merchantName: enhancedResults.merchant?.name,
+                layout: enhancedResults.layout,
+                words: words,
+                imageWidth: imageWidth,
+                imageHeight: imageHeight
             };
 
             setExtractedData(extracted);
-            setEditableAmount(amount?.toString() || '');
-            setEditableDate(date || '');
+            setEditableAmount(enhancedResults.amount?.toString() || '');
+            setEditableDate(enhancedResults.date || '');
 
-            if (!date) {
+            // Show matching info in console for debugging
+            if (currentMatchResult?.isMatch) {
+                console.log('🤖 Applied learned extraction rules:', currentMatchResult.suggestedExtraction);
+            }
+
+            // If confidence is low, prepare feedback form
+            if (intelligentResults.confidence < 70) {
+                const suggestions = receiptFeedbackSystem.generateFeedbackQuestions(ocrText, extracted);
+                setFeedbackSuggestions(suggestions);
+            }
+
+            if (!intelligentResults.date) {
                 setAwaitingDateInput(true);
             }
 
             setShowConfirmation(true);
 
         } catch (error) {
-            console.error('OCR Error:', error);
+            console.error('🚨 Enhanced OCR Error:', error);
             Alert.alert('OCR Error', 'Failed to process the image. Please try again.');
         } finally {
             setIsProcessing(false);
@@ -270,7 +381,7 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
     };
 
     const saveExpense = async () => {
-        if (!extractedData || !editableAmount) {
+        if (!extractedData || !editableAmount || !selectedImage) {
             Alert.alert('Missing Data', 'Please ensure amount is provided.');
             return;
         }
@@ -285,29 +396,152 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
             const finalDate = editableDate || new Date().toISOString().split('T')[0];
             const expenseDate = new Date(finalDate + 'T12:00:00.000Z');
 
+            // Prepare user corrections
+            const userCorrections = {
+                amount: parseFloat(editableAmount) !== extractedData.amount ? parseFloat(editableAmount) : undefined,
+                date: editableDate !== extractedData.date ? editableDate : undefined
+            };
+
+            // Create metadata for receipt storage
+            const metadata = receiptStorageSystem.createMetadataFromOCR(
+                extractedData.rawText,
+                {
+                    ...extractedData,
+                    amount: parseFloat(editableAmount),
+                    date: finalDate
+                },
+                Object.keys(userCorrections).some(key => userCorrections[key as keyof typeof userCorrections] !== undefined) ? userCorrections : null
+            );
+
+            // Save receipt with structured metadata
+            const savedReceipt = await receiptStorageSystem.saveReceiptWithMetadata(
+                selectedImage,
+                metadata
+            );
+
+            setSavedReceiptId(savedReceipt.firestoreId);
+
+            console.log('📦 Receipt saved with metadata:', {
+                id: savedReceipt.id,
+                type: metadata.receiptType,
+                quality: metadata.receiptQuality,
+                wasCorrected: metadata.wasCorrected
+            });
+
+            // Save expense to existing collection
             const expenseData = {
                 userId: user.uid,
                 amount: parseFloat(editableAmount),
                 category: extractedData.category || 'Other',
                 subcategory: extractedData.subcategory || 'Miscellaneous',
-                note: `Receipt scan - ${extractedData.category || 'Other'}`,
+                note: `Receipt scan - ${extractedData.merchantName || extractedData.category || 'Other'}`,
                 date: expenseDate.toISOString(),
                 createdAt: new Date().toISOString(),
                 currency: 'RON',
-                source: 'receipt_scanner'
+                source: 'receipt_scanner',
+                receiptId: savedReceipt.id // Link to receipt metadata
             };
 
             await addDoc(collection(db, 'expenses'), expenseData);
 
+            // Save successful pattern for learning (existing logic)
+            if (extractedData.words) {
+                receiptLearningSystem.saveSuccessfulPattern(
+                    extractedData.rawText,
+                    selectedImage,
+                    extractedData.words,
+                    extractedData.imageWidth || 1000,
+                    extractedData.imageHeight || 1200,
+                    {
+                        amount: extractedData.amount,
+                        date: extractedData.date,
+                        category: extractedData.category,
+                        subcategory: extractedData.subcategory
+                    },
+                    Object.keys(userCorrections).some(key => userCorrections[key as keyof typeof userCorrections] !== undefined) ? userCorrections : undefined
+                );
+            }
+
+            // Show success message with developer options
+            const hasCorrections = Object.keys(userCorrections).some(key => userCorrections[key as keyof typeof userCorrections] !== undefined);
+            const showDevOptions = __DEV__ && (hasCorrections || extractedData.confidence < 80);
+            const hasDeveloperSuggestion = __DEV__ && developerSuggestionData;
+
+            const alertButtons = [{ text: 'OK', onPress: () => resetScanner() }];
+
+            if (hasDeveloperSuggestion) {
+                alertButtons.push({
+                    text: 'Use Similar Layout',
+                    onPress: () => setShowDeveloperSuggestion(true)
+                });
+            }
+
+            if (showDevOptions) {
+                alertButtons.push({
+                    text: 'Add Annotations',
+                    onPress: () => setShowDeveloperAnnotations(true)
+                });
+            }
+
             Alert.alert(
                 'Success!',
-                `Expense of ${editableAmount} RON saved successfully!`,
-                [{ text: 'OK', onPress: () => resetScanner() }]
+                `Expense of ${editableAmount} RON saved successfully!${
+                    hasDeveloperSuggestion ? '\n\nSimilar layout detected!' : ''
+                }${showDevOptions ? '\n\nDeveloper: Add annotations?' : ''}`,
+                alertButtons
             );
+
+            // If there were low confidence or user corrections, potentially ask for feedback
+            if (hasCorrections || extractedData.confidence < 70) {
+                setTimeout(() => {
+                    if (feedbackSuggestions.length > 0 && !showDevOptions) {
+                        setShowFeedbackForm(true);
+                    }
+                }, 1000);
+            }
 
         } catch (error) {
             console.error('Error saving expense:', error);
             Alert.alert('Error', 'Failed to save expense. Please try again.');
+        }
+    };
+
+    const handleSubmitFeedback = async () => {
+        if (!extractedData || !selectedImage) return;
+
+        const user = auth.currentUser;
+        if (!user) return;
+
+        try {
+            // Collect feedback data (simplified - in real implementation you'd collect form data)
+            const userFeedback = {
+                whatWentWrong: 'OCR extraction had low confidence',
+                whereWasAmount: 'Unknown',
+                whereWasDate: 'Unknown',
+                merchantName: extractedData.merchantName || 'Unknown',
+                receiptType: extractedData.category || 'Unknown',
+                additionalTips: 'User provided feedback through form'
+            };
+
+            const userCorrections = {
+                amount: parseFloat(editableAmount) !== extractedData.amount ? parseFloat(editableAmount) : undefined,
+                date: editableDate !== extractedData.date ? editableDate : undefined
+            };
+
+            await receiptFeedbackSystem.saveFeedback(
+                selectedImage,
+                extractedData.rawText,
+                extractedData,
+                userCorrections,
+                userFeedback,
+                user.uid
+            );
+
+            setShowFeedbackForm(false);
+            Alert.alert('Thank you!', 'Your feedback will help improve future receipt scanning.');
+        } catch (error) {
+            console.error('Error submitting feedback:', error);
+            Alert.alert('Error', 'Failed to submit feedback.');
         }
     };
 
@@ -318,6 +552,13 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
         setEditableAmount('');
         setEditableDate('');
         setAwaitingDateInput(false);
+        setShowFeedbackForm(false);
+        setFeedbackSuggestions([]);
+        setOcrWords([]);
+        setLearningTips([]);
+        setMatchResult(null);
+        setShowDeveloperSuggestion(false);
+        setDeveloperSuggestionData(null);
     };
 
     const showImagePicker = () => {
@@ -421,6 +662,39 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
                                     </Text>
                                 )}
 
+                                {matchResult?.isMatch && (
+                                    <View style={styles.matchContainer}>
+                                        <Text style={styles.matchTitle}>🎯 Pattern Match Found</Text>
+                                        <Text style={styles.matchText}>
+                                            Similar to {matchResult.bestMatch?.metadata.receiptType} layout ({matchResult.confidence}% match)
+                                        </Text>
+                                        <Text style={styles.matchSubtext}>
+                                            Applied learned extraction rules automatically
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {learningTips.length > 0 && (
+                                    <View style={styles.tipsContainer}>
+                                        <Text style={styles.tipsTitle}>💡 Learning Tips</Text>
+                                        {learningTips.slice(0, 2).map((tip, index) => (
+                                            <Text key={index} style={styles.tipText}>{tip}</Text>
+                                        ))}
+                                    </View>
+                                )}
+
+                                {extractedData.confidence < 70 && feedbackSuggestions.length > 0 && (
+                                    <TouchableOpacity
+                                        style={styles.feedbackButton}
+                                        onPress={() => setShowFeedbackForm(true)}
+                                    >
+                                        <Ionicons name="school" size={16} color="#91483C" />
+                                        <Text style={styles.feedbackButtonText}>
+                                            Help me learn from this receipt
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+
                                 <View style={styles.buttonRow}>
                                     <TouchableOpacity style={styles.retryButton} onPress={resetScanner}>
                                         <Text style={styles.retryButtonText}>Try Again</Text>
@@ -486,6 +760,134 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
                     </View>
                 </View>
             </Modal>
+
+            {/* Learning Feedback Modal */}
+            <Modal
+                visible={showFeedbackForm}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowFeedbackForm(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.feedbackModal}>
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            <Text style={styles.feedbackTitle}>🤔 Help me learn from this receipt</Text>
+                            <Text style={styles.feedbackSubtitle}>
+                                Your feedback will help me recognize similar receipts better in the future.
+                            </Text>
+
+                            {feedbackSuggestions.map((suggestion, index) => (
+                                <View key={index} style={styles.suggestionSection}>
+                                    <Text style={styles.suggestionMessage}>{suggestion.message}</Text>
+
+                                    {suggestion.questions.map((question, qIndex) => (
+                                        <View key={qIndex} style={styles.questionContainer}>
+                                            <Text style={styles.questionText}>{question}</Text>
+                                            <TextInput
+                                                style={styles.feedbackInput}
+                                                placeholder="Your answer..."
+                                                multiline={true}
+                                                numberOfLines={2}
+                                            />
+                                        </View>
+                                    ))}
+                                </View>
+                            ))}
+
+                            <View style={styles.feedbackButtonRow}>
+                                <TouchableOpacity
+                                    style={styles.feedbackCancelButton}
+                                    onPress={() => setShowFeedbackForm(false)}
+                                >
+                                    <Text style={styles.feedbackCancelText}>Skip</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={styles.feedbackSubmitButton}
+                                    onPress={handleSubmitFeedback}
+                                >
+                                    <Text style={styles.feedbackSubmitText}>Submit Feedback</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Developer Suggestion Modal */}
+            <Modal
+                visible={showDeveloperSuggestion && __DEV__}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowDeveloperSuggestion(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.suggestionModal}>
+                        <Text style={styles.suggestionTitle}>🎯 Similar Layout Detected</Text>
+                        {developerSuggestionData && (
+                            <>
+                                <Text style={styles.suggestionSubtitle}>
+                                    This receipt is {developerSuggestionData.confidence}% similar to a previous {developerSuggestionData.similarReceipt.receiptType} layout.
+                                </Text>
+
+                                <View style={styles.layoutPreview}>
+                                    <Text style={styles.previewTitle}>Suggested Template:</Text>
+                                    <Text style={styles.previewText}>• Type: {developerSuggestionData.similarReceipt.receiptType}</Text>
+                                    <Text style={styles.previewText}>• Date: {developerSuggestionData.similarReceipt.dateLocation}</Text>
+                                    <Text style={styles.previewText}>• Amount: {developerSuggestionData.similarReceipt.amountLocation}</Text>
+                                    <Text style={styles.previewText}>• Quality: {developerSuggestionData.similarReceipt.receiptQuality}</Text>
+                                </View>
+
+                                <View style={styles.suggestionButtonRow}>
+                                    <TouchableOpacity
+                                        style={styles.suggestionRejectButton}
+                                        onPress={() => {
+                                            setShowDeveloperSuggestion(false);
+                                            setShowDeveloperAnnotations(true);
+                                        }}
+                                    >
+                                        <Text style={styles.suggestionRejectText}>Manual Annotation</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={styles.suggestionAcceptButton}
+                                        onPress={() => {
+                                            // Auto-apply the suggested layout
+                                            setShowDeveloperSuggestion(false);
+                                            resetScanner();
+                                        }}
+                                    >
+                                        <Text style={styles.suggestionAcceptText}>Apply Template</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </>
+                        )}
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Developer Annotation Modal */}
+            {__DEV__ && extractedData && savedReceiptId && (
+                <DeveloperAnnotationModal
+                    visible={showDeveloperAnnotations}
+                    onClose={() => {
+                        setShowDeveloperAnnotations(false);
+                        resetScanner();
+                    }}
+                    receiptId={savedReceiptId}
+                    currentMetadata={receiptStorageSystem.createMetadataFromOCR(
+                        extractedData.rawText,
+                        extractedData,
+                        {
+                            amount: parseFloat(editableAmount) !== extractedData.amount ? parseFloat(editableAmount) : undefined,
+                            date: editableDate !== extractedData.date ? editableDate : undefined
+                        }
+                    )}
+                    onSave={(annotations) => {
+                        console.log('📝 Developer annotations saved:', annotations);
+                    }}
+                />
+            )}
         </ImageBackground>
     );
 }
@@ -728,6 +1130,228 @@ const styles = StyleSheet.create({
     modalCancelText: {
         fontSize: 16,
         color: '#999',
+        fontFamily: 'Fredoka',
+    },
+    tipsContainer: {
+        backgroundColor: '#E8F5E8',
+        borderRadius: 12,
+        padding: 16,
+        marginVertical: 12,
+        borderLeftWidth: 4,
+        borderLeftColor: '#4CAF50',
+    },
+    tipsTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#2E7D32',
+        marginBottom: 8,
+        fontFamily: 'Fredoka',
+    },
+    tipText: {
+        fontSize: 14,
+        color: '#388E3C',
+        marginBottom: 4,
+        fontFamily: 'Fredoka',
+    },
+    feedbackButton: {
+        backgroundColor: '#FFF2D8',
+        borderRadius: 12,
+        padding: 12,
+        marginVertical: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#91483C',
+    },
+    feedbackButtonText: {
+        fontSize: 14,
+        color: '#91483C',
+        marginLeft: 8,
+        fontFamily: 'Fredoka',
+    },
+    feedbackModal: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 24,
+        margin: 20,
+        maxHeight: '80%',
+    },
+    feedbackTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#91483C',
+        marginBottom: 8,
+        textAlign: 'center',
+        fontFamily: 'Fredoka',
+    },
+    feedbackSubtitle: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 24,
+        lineHeight: 22,
+        fontFamily: 'Fredoka',
+    },
+    suggestionSection: {
+        backgroundColor: '#f8f8f8',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 16,
+    },
+    suggestionMessage: {
+        fontSize: 16,
+        color: '#333',
+        marginBottom: 12,
+        fontWeight: '600',
+        fontFamily: 'Fredoka',
+    },
+    questionContainer: {
+        marginBottom: 12,
+    },
+    questionText: {
+        fontSize: 14,
+        color: '#555',
+        marginBottom: 6,
+        fontFamily: 'Fredoka',
+    },
+    feedbackInput: {
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 14,
+        minHeight: 40,
+        fontFamily: 'Fredoka',
+    },
+    feedbackButtonRow: {
+        flexDirection: 'row',
+        marginTop: 20,
+        gap: 12,
+    },
+    feedbackCancelButton: {
+        flex: 1,
+        backgroundColor: '#f0f0f0',
+        borderRadius: 15,
+        paddingVertical: 12,
+        alignItems: 'center',
+    },
+    feedbackCancelText: {
+        fontSize: 16,
+        color: '#666',
+        fontWeight: '600',
+        fontFamily: 'Fredoka',
+    },
+    feedbackSubmitButton: {
+        flex: 2,
+        backgroundColor: '#91483C',
+        borderRadius: 15,
+        paddingVertical: 12,
+        alignItems: 'center',
+    },
+    feedbackSubmitText: {
+        fontSize: 16,
+        color: 'white',
+        fontWeight: '600',
+        fontFamily: 'Fredoka',
+    },
+    matchContainer: {
+        backgroundColor: '#E3F2FD',
+        borderRadius: 12,
+        padding: 16,
+        marginVertical: 12,
+        borderLeftWidth: 4,
+        borderLeftColor: '#2196F3',
+    },
+    matchTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#1976D2',
+        marginBottom: 8,
+        fontFamily: 'Fredoka',
+    },
+    matchText: {
+        fontSize: 14,
+        color: '#1565C0',
+        marginBottom: 4,
+        fontFamily: 'Fredoka',
+    },
+    matchSubtext: {
+        fontSize: 12,
+        color: '#42A5F5',
+        fontStyle: 'italic',
+        fontFamily: 'Fredoka',
+    },
+    suggestionModal: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 24,
+        margin: 20,
+        maxHeight: '70%',
+    },
+    suggestionTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#91483C',
+        marginBottom: 8,
+        textAlign: 'center',
+        fontFamily: 'Fredoka',
+    },
+    suggestionSubtitle: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 20,
+        lineHeight: 22,
+        fontFamily: 'Fredoka',
+    },
+    layoutPreview: {
+        backgroundColor: '#f8f8f8',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 20,
+    },
+    previewTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 8,
+        fontFamily: 'Fredoka',
+    },
+    previewText: {
+        fontSize: 14,
+        color: '#555',
+        marginBottom: 4,
+        fontFamily: 'Fredoka',
+    },
+    suggestionButtonRow: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    suggestionRejectButton: {
+        flex: 1,
+        backgroundColor: '#f0f0f0',
+        borderRadius: 15,
+        paddingVertical: 12,
+        alignItems: 'center',
+    },
+    suggestionRejectText: {
+        fontSize: 14,
+        color: '#666',
+        fontWeight: '600',
+        fontFamily: 'Fredoka',
+    },
+    suggestionAcceptButton: {
+        flex: 2,
+        backgroundColor: '#91483C',
+        borderRadius: 15,
+        paddingVertical: 12,
+        alignItems: 'center',
+    },
+    suggestionAcceptText: {
+        fontSize: 14,
+        color: 'white',
+        fontWeight: '600',
         fontFamily: 'Fredoka',
     },
 });
