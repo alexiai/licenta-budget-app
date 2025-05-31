@@ -304,12 +304,6 @@ const styles = StyleSheet.create({
         fontSize: 20,
         marginRight: 6,
     },
-    chatButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
-        fontFamily: 'Fredoka',
-    },
     chatHeader: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -348,23 +342,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-
-    chatButton: {
-        backgroundColor: '#F97850',
-        borderRadius: 26,
-        paddingVertical: 12,
-        paddingHorizontal: 26,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 6,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        position: 'relative',
-    },
-
     bunnyIcon: {
         position: 'absolute',
         top: -15,
