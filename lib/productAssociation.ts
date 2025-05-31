@@ -126,10 +126,16 @@ export const productAssociations: ProductAssociation[] = [
     },
 
     {
-        keywords: ['gaz', 'gas', 'distrigaz', 'engie', 'gaze naturale', 'factură gaz', 'contor gaz', 'încălzire'],
+        keywords: ['distrigaz', 'engie', 'gaze naturale', 'factură gaz', 'contor gaz', 'încălzire'],
         category: 'Housing',
         subcategory: 'Electricity',
         confidence: 85
+    },
+    {
+        keywords: ['benzinarie', 'gas station', 'petrom', 'mol', 'omv', 'rompetrol', 'combustibil', 'benzină', 'motorină'],
+        category: 'Transport',
+        subcategory: 'Gas',
+        confidence: 90
     },
 
     {
