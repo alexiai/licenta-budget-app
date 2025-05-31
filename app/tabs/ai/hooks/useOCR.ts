@@ -1,7 +1,8 @@
-
 import { useRef } from 'react';
-import { createWorker } from 'tesseract.js';
+import { TesseractWorker } from 'tesseract.js';
+import { OCRSearchParams, ReceiptPattern } from '../types/receipt';
 import { romanianToEnglish } from '../../../../lib/translationDictionary';
+import { PreprocessingResult } from '../types/ocr';
 
 export interface OCRWord {
     text: string;
@@ -14,33 +15,10 @@ export interface OCRWord {
     };
 }
 
-export interface ReceiptPattern {
-    id: string;
-    ocrText: string;
-    extractedData: {
-        amount: number;
-        date: string;
-        items: Array<{ name: string; price: number }>;
-    };
-    userCorrections?: {
-        originalAmount?: number;
-        correctedAmount?: number;
-        originalDate?: string;
-        correctedDate?: string;
-    };
-    merchant?: string;
-    layout: {
-        datePosition?: { x: number; y: number; region: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'middle' };
-        totalPosition?: { x: number; y: number };
-        itemsRegion?: { startY: number; endY: number };
-    };
-    timestamp: string;
-}
-
 export const useOCR = () => {
-    const workerRef = useRef<any>(null);
+    const workerRef = useRef<TesseractWorker | null>(null);
 
-    const loadReceiptPatterns = () => {
+    const loadReceiptPatterns = (): ReceiptPattern[] => {
         try {
             const savedPatterns = localStorage.getItem('receiptPatterns');
             if (savedPatterns) {
@@ -52,7 +30,7 @@ export const useOCR = () => {
         return [];
     };
 
-    const saveReceiptPatterns = (patterns: ReceiptPattern[]) => {
+    const saveReceiptPatterns = (patterns: ReceiptPattern[]): void => {
         try {
             localStorage.setItem('receiptPatterns', JSON.stringify(patterns));
             console.log('💾 Saved receipt patterns:', patterns.length);
@@ -61,11 +39,12 @@ export const useOCR = () => {
         }
     };
 
-    const findSimilarReceipts = (ocrText: string, receiptPatterns: ReceiptPattern[]): ReceiptPattern[] => {
-        const textLower = ocrText.toLowerCase();
+    const findSimilarReceipts = async (text: string, params: OCRSearchParams): Promise<ReceiptPattern[]> => {
+        const patterns = loadReceiptPatterns();
+        const textLower = text.toLowerCase();
         const words = textLower.split(/\s+/).filter(w => w.length > 2);
 
-        return receiptPatterns
+        return patterns
             .map(pattern => {
                 const patternWords = pattern.ocrText.toLowerCase().split(/\s+/).filter(w => w.length > 2);
                 const commonWords = words.filter(word => patternWords.includes(word));
@@ -78,102 +57,114 @@ export const useOCR = () => {
             .map(({ pattern }) => pattern);
     };
 
-    const preprocessImage = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): HTMLCanvasElement => {
-        const width = canvas.width;
-        const height = canvas.height;
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const data = imageData.data;
+    const preprocessImage = async (imageUri: string): Promise<PreprocessingResult> => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
 
-        const grayData = new Uint8Array(width * height);
-        for (let i = 0; i < data.length; i += 4) {
-            const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
-            grayData[i / 4] = gray;
-        }
+            img.onload = () => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-        const histogram = new Array(256).fill(0);
-        for (let i = 0; i < grayData.length; i++) {
-            histogram[grayData[i]]++;
-        }
-
-        let sum = 0;
-        for (let i = 0; i < 256; i++) {
-            sum += i * histogram[i];
-        }
-
-        let sumB = 0;
-        let wB = 0;
-        let wF = 0;
-        let mB, mF, max = 0.0;
-        let between = 0.0;
-        let threshold1 = 0.0;
-        let threshold2 = 0.0;
-
-        for (let i = 0; i < 256; i++) {
-            wB += histogram[i];
-            if (wB === 0) continue;
-
-            wF = grayData.length - wB;
-            if (wF === 0) break;
-
-            sumB += i * histogram[i];
-            mB = sumB / wB;
-            mF = (sum - sumB) / wF;
-            between = wB * wF * (mB - mF) * (mB - mF);
-
-            if (between > max) {
-                max = between;
-                threshold1 = i;
-            }
-        }
-
-        const adaptiveThreshold = Math.max(threshold1, 120);
-
-        const processedData = new Uint8ClampedArray(data.length);
-        for (let i = 0; i < grayData.length; i++) {
-            const pixelIndex = i * 4;
-            let gray = grayData[i];
-
-            gray = Math.min(255, Math.max(0, (gray - 128) * 1.2 + 128));
-
-            const binaryValue = gray > adaptiveThreshold ? 255 : 0;
-
-            processedData[pixelIndex] = binaryValue;
-            processedData[pixelIndex + 1] = binaryValue;
-            processedData[pixelIndex + 2] = binaryValue;
-            processedData[pixelIndex + 3] = data[pixelIndex + 3];
-        }
-
-        const morphologyData = new Uint8ClampedArray(processedData);
-        const kernelSize = 3;
-        const halfKernel = Math.floor(kernelSize / 2);
-
-        for (let y = halfKernel; y < height - halfKernel; y++) {
-            for (let x = halfKernel; x < width - halfKernel; x++) {
-                let minVal = 255, maxVal = 0;
-
-                for (let ky = -halfKernel; ky <= halfKernel; ky++) {
-                    for (let kx = -halfKernel; kx <= halfKernel; kx++) {
-                        const neighborIndex = ((y + ky) * width + (x + kx)) * 4;
-                        const val = processedData[neighborIndex];
-                        minVal = Math.min(minVal, val);
-                        maxVal = Math.max(maxVal, val);
+                    if (!ctx) {
+                        reject(new Error('Failed to get canvas context'));
+                        return;
                     }
+
+                    // Set optimal dimensions
+                    let targetWidth = img.width;
+                    let targetHeight = img.height;
+                    const MAX_DIMENSION = 2000;
+                    const MIN_DIMENSION = 800;
+
+                    if (Math.max(targetWidth, targetHeight) > MAX_DIMENSION) {
+                        const ratio = MAX_DIMENSION / Math.max(targetWidth, targetHeight);
+                        targetWidth *= ratio;
+                        targetHeight *= ratio;
+                    } else if (Math.max(targetWidth, targetHeight) < MIN_DIMENSION) {
+                        const ratio = MIN_DIMENSION / Math.max(targetWidth, targetHeight);
+                        targetWidth *= ratio;
+                        targetHeight *= ratio;
+                    }
+
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+
+                    // Draw and convert to grayscale
+                    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+                    const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+                    const data = imageData.data;
+
+                    // Convert to grayscale
+                    for (let i = 0; i < data.length; i += 4) {
+                        const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+                        data[i] = gray;
+                        data[i + 1] = gray;
+                        data[i + 2] = gray;
+                    }
+
+                    // Apply adaptive thresholding
+                    const histogram = new Array(256).fill(0);
+                    for (let i = 0; i < data.length; i += 4) {
+                        histogram[data[i]]++;
+                    }
+
+                    let threshold = 128;
+                    let newThreshold;
+                    
+                    do {
+                        let low = 0, high = 0;
+                        let lowSum = 0, highSum = 0;
+
+                        for (let i = 0; i < threshold; i++) {
+                            low += histogram[i];
+                            lowSum += histogram[i] * i;
+                        }
+                        for (let i = threshold; i < 256; i++) {
+                            high += histogram[i];
+                            highSum += histogram[i] * i;
+                        }
+
+                        const lowMean = low ? lowSum / low : 0;
+                        const highMean = high ? highSum / high : 0;
+
+                        newThreshold = Math.round((lowMean + highMean) / 2);
+
+                        if (newThreshold === threshold) break;
+                        threshold = newThreshold;
+                    } while (true);
+
+                    // Apply threshold and increase contrast
+                    for (let i = 0; i < data.length; i += 4) {
+                        const value = data[i] < threshold ? 0 : 255;
+                        data[i] = value;
+                        data[i + 1] = value;
+                        data[i + 2] = value;
+                    }
+
+                    ctx.putImageData(imageData, 0, 0);
+
+                    // Return processed image
+                    console.log(`📸 Image preprocessed: size=${targetWidth}x${targetHeight}, threshold=${threshold}`);
+                    resolve({
+                        processedDataUrl: canvas.toDataURL('image/jpeg', 0.95),
+                        width: targetWidth,
+                        height: targetHeight
+                    });
+                } catch (error) {
+                    console.error('Error during image preprocessing:', error);
+                    reject(error);
                 }
+            };
 
-                const currentIndex = (y * width + x) * 4;
-                const processedValue = (maxVal + minVal) > 255 ? 255 : 0;
-                morphologyData[currentIndex] = processedValue;
-                morphologyData[currentIndex + 1] = processedValue;
-                morphologyData[currentIndex + 2] = processedValue;
-            }
-        }
+            img.onerror = (error) => {
+                console.error('Failed to load image:', error);
+                reject(new Error('Failed to load image'));
+            };
 
-        const finalImageData = ctx.createImageData(width, height);
-        finalImageData.data.set(morphologyData);
-        ctx.putImageData(finalImageData, 0, 0);
-
-        console.log(`📸 Image preprocessed: threshold=${adaptiveThreshold}, size=${width}x${height}`);
-        return canvas;
+            img.src = imageUri;
+        });
     };
 
     const translateReceiptText = async (text: string): Promise<string> => {
@@ -193,10 +184,10 @@ export const useOCR = () => {
 
     return {
         workerRef,
+        findSimilarReceipts,
+        translateReceiptText,
         loadReceiptPatterns,
         saveReceiptPatterns,
-        findSimilarReceipts,
-        preprocessImage,
-        translateReceiptText
+        preprocessImage
     };
 };

@@ -1,7 +1,13 @@
-
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { db } from './firebase';
 import type { ReceiptMetadata, SavedReceipt } from './receiptStorage';
+
+export interface SpatialFeature {
+    dateRegion: 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+    amountRegion: 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+    layoutComplexity: 'simple' | 'medium' | 'complex';
+    lineCount: number;
+}
 
 export interface MatchResult {
     isMatch: boolean;
@@ -15,13 +21,6 @@ export interface MatchResult {
     };
     matchingStrategy: 'merchant' | 'layout' | 'text_similarity' | 'none';
     similarReceipts: SavedReceipt[];
-}
-
-export interface SpatialFeature {
-    dateRegion: 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
-    amountRegion: 'top-left' | 'top-center' | 'top-right' | 'middle-left' | 'middle-center' | 'middle-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
-    layoutComplexity: 'simple' | 'medium' | 'complex';
-    lineCount: number;
 }
 
 export interface DeveloperSuggestion {
@@ -305,13 +304,14 @@ export class ReceiptMatchingSystem {
         const referenceData = metadata.userCorrections || metadata.extractedData;
 
         // Suggest category based on matched receipt type
-        if (metadata.receiptType && !currentExtraction.category) {
-            const categoryMapping = {
+        if (metadata.receiptType) {
+            const categoryMapping: Record<string, string> = {
                 'Supermarket': 'Groceries',
                 'Bakery': 'Groceries',
                 'Gas Station': 'Transport',
                 'Restaurant': 'Food & Dining',
-                'Pharmacy': 'Health'
+                'Pharmacy': 'Health',
+                'Other': 'Other'
             };
             suggestions.category = categoryMapping[metadata.receiptType] || 'Other';
         }

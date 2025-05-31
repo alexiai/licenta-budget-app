@@ -1,12 +1,16 @@
-
 import { OCRWord, ReceiptPattern } from '../hooks/useOCR';
 
 export const extractDateWithSpatialAwareness = (words: OCRWord[], imageWidth: number, imageHeight: number, similarReceipts: ReceiptPattern[]): string | null => {
+    if (!Array.isArray(words)) {
+        console.warn('Words parameter is not an array in extractDateWithSpatialAwareness');
+        return null;
+    }
+
     const layout = analyzeReceiptLayoutForDate(words, imageWidth, imageHeight);
 
-    if (similarReceipts.length > 0) {
+    if (Array.isArray(similarReceipts) && similarReceipts.length > 0) {
         const preferredRegions = similarReceipts
-            .filter(r => r.layout.datePosition)
+            .filter(r => r.layout?.datePosition)
             .map(r => r.layout.datePosition!.region);
 
         for (const region of preferredRegions) {
@@ -27,11 +31,16 @@ export const extractDateWithSpatialAwareness = (words: OCRWord[], imageWidth: nu
         }
     }
 
-    const allText = words.map(w => w.text).join(' ');
+    const allText = Array.isArray(words) ? words.map(w => w?.text || '').filter(Boolean).join(' ') : '';
     return extractDateFromReceiptText(allText);
 };
 
 const analyzeReceiptLayoutForDate = (words: OCRWord[], imageWidth: number, imageHeight: number) => {
+    if (!Array.isArray(words)) {
+        console.warn('Words parameter is not an array in analyzeReceiptLayoutForDate');
+        return { dateRegions: [] };
+    }
+
     const layout = {
         dateRegions: [] as Array<{ word: OCRWord; region: string; confidence: number }>
     };
@@ -42,8 +51,10 @@ const analyzeReceiptLayoutForDate = (words: OCRWord[], imageWidth: number, image
     const leftX = imageWidth * 0.25;
 
     words.forEach(word => {
-        const centerX = (word.bbox.x0 + word.bbox.x1) / 2;
-        const centerY = (word.bbox.y0 + word.bbox.y1) / 2;
+        if (!word || typeof word.text !== 'string') return;
+
+        const centerX = (word.bbox?.x0 ?? 0 + word.bbox?.x1 ?? 0) / 2;
+        const centerY = (word.bbox?.y0 ?? 0 + word.bbox?.y1 ?? 0) / 2;
 
         const datePattern = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/;
         if (datePattern.test(word.text)) {

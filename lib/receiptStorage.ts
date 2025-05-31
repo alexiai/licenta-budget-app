@@ -1,4 +1,3 @@
-
 import { addDoc, collection, updateDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db, storage } from './firebase';
@@ -51,6 +50,17 @@ export interface SavedReceipt {
     localImagePath?: string;
     metadata: ReceiptMetadata;
     firestoreId: string;
+}
+
+interface OCRWord {
+    text: string;
+    confidence: number;
+    bbox: {
+        x0: number;
+        y0: number;
+        x1: number;
+        y1: number;
+    };
 }
 
 export class ReceiptStorageSystem {
@@ -166,27 +176,27 @@ export class ReceiptStorageSystem {
         receiptAnalysis: any = {}
     ): Omit<ReceiptMetadata, 'imageId' | 'timestamp' | 'userId'> {
         const wasCorrected = Boolean(userCorrections && Object.keys(userCorrections).length > 0);
-        const wasConfirmed = !receiptAnalysis.ocrFailed; // OCR failures need user confirmation
+        const wasConfirmed = !receiptAnalysis.ocrFailed;
         const ocrFailed = receiptAnalysis.ocrFailed || false;
 
         // Determine receipt type from content
         const receiptType = this.determineReceiptType(ocrText, extractedData);
 
-        // Analyze layout from OCR data (if available)
-        const layoutAnalysis = this.analyzeLayout(ocrText, receiptAnalysis);
+        // Analyze layout from OCR data
+        const layoutAnalysis = this.analyzeLayout(ocrText, extractedData);
 
         // Extract products information
         const products = this.extractProducts(ocrText, extractedData);
 
         return {
             receiptType,
-            dateLocation: layoutAnalysis.dateLocation,
-            amountLocation: layoutAnalysis.amountLocation,
+            dateLocation: layoutAnalysis.dateLocation || 'top-right',
+            amountLocation: layoutAnalysis.amountLocation || 'bottom-right',
             products,
             extractedData: {
-                amount: extractedData.amount,
-                date: extractedData.date,
-                category: extractedData.category,
+                amount: extractedData.amount || 0,
+                date: extractedData.date || new Date().toISOString().split('T')[0],
+                category: extractedData.category || 'Other',
                 subcategory: extractedData.subcategory,
                 merchantName: extractedData.merchantName
             },
@@ -195,15 +205,15 @@ export class ReceiptStorageSystem {
             wasConfirmed,
             ocrConfidence: extractedData.confidence || 0,
             ocrText,
-            receiptQuality: this.assessReceiptQuality(extractedData.confidence, wasCorrected, receiptAnalysis.ocrFailed),
-            layoutNotes: this.generateLayoutNotes(layoutAnalysis, receiptType)
+            layoutNotes: this.generateLayoutNotes(layoutAnalysis, receiptType),
+            receiptQuality: this.assessReceiptQuality(extractedData.confidence, wasCorrected, ocrFailed)
         };
     }
 
     private determineReceiptType(ocrText: string, extractedData: any): ReceiptMetadata['receiptType'] {
         const text = ocrText.toLowerCase();
 
-        if (text.includes('lidl') || text.includes('kaufland') || text.includes('mega') || text.includes('carrefour')) {
+        if (text.includes('lidl') || text.includes('kaufland') || text.includes('mega') || text.includes('carrefour') || text.includes('profi')) {
             return 'Supermarket';
         }
         if (text.includes('mol') || text.includes('omv') || text.includes('petrom') || text.includes('benzinarie')) {
@@ -222,15 +232,55 @@ export class ReceiptStorageSystem {
         return 'Other';
     }
 
-    private analyzeLayout(ocrText: string, receiptAnalysis: any): {
-        dateLocation: ReceiptMetadata['dateLocation'];
-        amountLocation: ReceiptMetadata['amountLocation'];
-    } {
-        // Default positions - these would be enhanced with actual spatial analysis
-        return {
-            dateLocation: receiptAnalysis.dateLocation || 'top-right',
-            amountLocation: receiptAnalysis.amountLocation || 'bottom-right'
+    private analyzeLayout(ocrText: string, extractedData: any): { dateLocation: ReceiptMetadata['dateLocation'], amountLocation: ReceiptMetadata['amountLocation'] } {
+        // Default positions if analysis fails
+        const defaultLayout = {
+            dateLocation: 'top-right' as ReceiptMetadata['dateLocation'],
+            amountLocation: 'bottom-right' as ReceiptMetadata['amountLocation']
         };
+
+        if (!extractedData.words || extractedData.words.length === 0) {
+            return defaultLayout;
+        }
+
+        try {
+            const words = extractedData.words as OCRWord[];
+            const imageWidth = extractedData.imageWidth || 1000;
+            const imageHeight = extractedData.imageHeight || 1200;
+
+            // Find date position
+            const dateWord = words.find((w: OCRWord) => w.text.match(/\d{2}[-.\/]\d{2}[-.\/]\d{4}/));
+            let dateLocation = defaultLayout.dateLocation;
+            if (dateWord) {
+                const x = dateWord.bbox.x0 / imageWidth;
+                const y = dateWord.bbox.y0 / imageHeight;
+                dateLocation = this.determinePosition(x, y);
+            }
+
+            // Find amount position
+            const amountWord = words.find((w: OCRWord) => w.text.match(/\d+[.,]\d{2}/));
+            let amountLocation = defaultLayout.amountLocation;
+            if (amountWord) {
+                const x = amountWord.bbox.x0 / imageWidth;
+                const y = amountWord.bbox.y0 / imageHeight;
+                amountLocation = this.determinePosition(x, y);
+            }
+
+            return {
+                dateLocation,
+                amountLocation
+            };
+        } catch (error) {
+            console.error('Error analyzing layout:', error);
+            return defaultLayout;
+        }
+    }
+
+    private determinePosition(x: number, y: number): ReceiptMetadata['dateLocation'] {
+        // Convert normalized coordinates (0-1) to position
+        const xPos = x < 0.33 ? 'left' : x < 0.66 ? 'center' : 'right';
+        const yPos = y < 0.33 ? 'top' : y < 0.66 ? 'middle' : 'bottom';
+        return `${yPos}-${xPos}` as ReceiptMetadata['dateLocation'];
     }
 
     private extractProducts(ocrText: string, extractedData: any): ReceiptMetadata['products'] {
@@ -266,16 +316,16 @@ export class ReceiptStorageSystem {
         return products;
     }
 
-    private assessReceiptQuality(confidence: number, wasCorrected: boolean, ocrFailed: boolean = false): ReceiptMetadata['receiptQuality'] {
-        if (ocrFailed || confidence === 0) return 'poor';
-        if (confidence >= 90 && !wasCorrected) return 'excellent';
-        if (confidence >= 75 && !wasCorrected) return 'good';
-        if (confidence >= 60 || (confidence >= 50 && wasCorrected)) return 'fair';
-        return 'poor';
+    private generateLayoutNotes(layoutAnalysis: any, receiptType: ReceiptMetadata['receiptType']): string {
+        return `${receiptType} receipt - date ${layoutAnalysis.dateLocation}, amount ${layoutAnalysis.amountLocation}`;
     }
 
-    private generateLayoutNotes(layoutAnalysis: any, receiptType: string): string {
-        return `${receiptType} receipt with date at ${layoutAnalysis.dateLocation} and total at ${layoutAnalysis.amountLocation}`;
+    private assessReceiptQuality(confidence: number, wasCorrected: boolean, ocrFailed: boolean): ReceiptMetadata['receiptQuality'] {
+        if (ocrFailed) return 'poor';
+        if (wasCorrected) return 'fair';
+        if (confidence >= 90) return 'excellent';
+        if (confidence >= 75) return 'good';
+        return 'fair';
     }
 
     // Get all saved receipts for analysis

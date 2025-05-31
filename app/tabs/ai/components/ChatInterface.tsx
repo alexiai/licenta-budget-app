@@ -19,16 +19,25 @@ import { addDoc, collection } from 'firebase/firestore';
 import { auth, db } from '../../../../lib/firebase';
 import bg from '@assets/bg/AIback.png';
 import * as ImagePicker from 'expo-image-picker';
-import { useOCR, OCRWord, ReceiptPattern } from '../hooks/useOCR';
+import { useOCR } from '../hooks/useOCR';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { extractDateWithSpatialAwareness } from '../utils/dateExtraction';
 import { extractAmountWithSpatialAwareness } from '../utils/amountExtraction';
 import { detectMerchantAdvanced, analyzeReceiptLayout } from '../utils/receiptExtraction';
-import { parseExpenseFromText, ParsedExpense } from '../utils/expenseParser';
+import { parseExpenseFromText, ParsedExpense, findCategoryByProduct } from '../utils/expenseParser';
 import { translateText, detectLanguage, getLocalizedText } from '../utils/textProcessing';
 import MessageList from './chat/MessageList';
 import QuickReplies from './chat/QuickReplies';
 import ChatInput from './chat/ChatInput';
+import { createWorker } from 'tesseract.js';
+import { matchReceiptTemplate, extractReceiptData } from '../utils/receiptTemplates';
+import { preprocessImage } from '../utils/imagePreprocessing';
+import { OCRWord } from '../hooks/useOCR';
+import { ReceiptPattern } from '../types/receipt';
+import { createOCRWorker, OCRProgress, TesseractResult } from '../utils/ocrConfig';
+import { ReceiptMatchingSystem } from '../../../../lib/receiptMatching';
+
+const receiptMatchingSystem = new ReceiptMatchingSystem();
 
 interface ChatMessage {
     id: string;
@@ -41,6 +50,20 @@ interface ChatMessage {
 
 interface QuickReply {
     text: string;
+    action: () => void;
+}
+
+interface ExtendedOCRResult {
+    text: string;
+    confidence: number;
+    words?: OCRWord[];
+    imageWidth?: number;
+    imageHeight?: number;
+    amount?: number | null;
+    date?: string | null;
+}
+
+interface ChatInterfaceProps {
     action: () => void;
 }
 
@@ -58,12 +81,12 @@ export default function ChatInterface(): JSX.Element {
 
     const [inputText, setInputText] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
-    const [currentParsing, setCurrentParsing] = useState<Partial<ParsedExpense> | null>(null);
+    const [currentParsing, setCurrentParsing] = useState<ParsedExpense | null>(null);
     const [awaitingInput, setAwaitingInput] = useState<string | null>(null);
     const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
     const [userLanguage, setUserLanguage] = useState<'en' | 'ro'>('en');
 
-    const scrollViewRef = useRef<ScrollView | null>(null);
+    const scrollViewRef = useRef<ScrollView>(null);
     const [receiptPatterns, setReceiptPatterns] = useState<ReceiptPattern[]>([]);
 
     const { workerRef, loadReceiptPatterns, saveReceiptPatterns, findSimilarReceipts, preprocessImage, translateReceiptText } = useOCR();
@@ -433,7 +456,8 @@ export default function ChatInterface(): JSX.Element {
             if (!result.canceled && result.assets?.[0]) {
                 await processReceiptImage(result.assets[0].uri);
             }
-        } catch (error) {
+        } catch (err) {
+            const error = err as Error;
             console.error('Error taking photo:', error);
             Alert.alert('Error', `Failed to take photo: ${error.message || 'Unknown error'}`);
         }
@@ -451,208 +475,114 @@ export default function ChatInterface(): JSX.Element {
             if (!result.canceled && result.assets?.[0]) {
                 await processReceiptImage(result.assets[0].uri);
             }
-        } catch (error) {
+        } catch (err) {
+            const error = err as Error;
             console.error('Error picking image:', error);
             Alert.alert('Error', `Failed to pick image: ${error.message || 'Unknown error'}`);
         }
     };
 
-    const processReceiptImage = async (imageUri: string) => {
-        addMessage('🧾 Receipt image sent', true);
-        setIsProcessing(true);
-
+    const processReceiptImage = async (imageUri: string): Promise<ExtendedOCRResult> => {
         try {
-            console.log('🚀 Starting intelligent OCR processing...');
-
-            let processedImageUri = imageUri;
-            let imageWidth = 0;
-            let imageHeight = 0;
-
-            try {
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-
-                await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = reject;
-                    img.src = imageUri;
-                });
-
-                imageWidth = img.width;
-                imageHeight = img.height;
-
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-
-                if (ctx) {
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    ctx.drawImage(img, 0, 0);
-
-                    preprocessImage(canvas, ctx);
-                    processedImageUri = canvas.toDataURL('image/jpeg', 0.9);
-                    console.log('📸 Image preprocessed successfully');
-                }
-            } catch (preprocessError) {
-                console.log('⚠️ Image preprocessing failed, using original:', preprocessError);
-                processedImageUri = imageUri;
-            }
-
-            if (!workerRef.current) {
-                console.log('Initializing enhanced Tesseract worker...');
-                const { createWorker } = await import('tesseract.js');
-                workerRef.current = await createWorker(['eng', 'ron']);
-
-                await workerRef.current.setParameters({
-                    tessedit_pageseg_mode: '6',
-                    tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĂÂÎȘȚăâîșț.,:-+/\\ ()€$',
-                    preserve_interword_spaces: '1',
-                    tessedit_do_invert: '0',
-                    tessedit_write_images: '1'
-                });
-
-                console.log('🤖 Enhanced Tesseract worker initialized');
-            }
-
-            console.log('🔍 Starting OCR recognition with spatial data...');
-
-            const { data } = await workerRef.current.recognize(processedImageUri);
-            const ocrText = data.text;
-            const confidence = data.confidence;
-            const words: OCRWord[] = data.words.map((word: any) => ({
-                text: word.text,
-                confidence: word.confidence,
-                bbox: word.bbox
-            }));
-
-            console.log(`📝 OCR Results: "${ocrText}" (confidence: ${confidence}%)`);
-            console.log(`📊 Extracted ${words.length} words with spatial data`);
-
-            const similarReceipts = findSimilarReceipts(ocrText);
-            console.log(`📚 Found ${similarReceipts.length} similar receipt patterns`);
-
-            const translatedText = await translateReceiptText(ocrText);
-            const combinedText = ocrText + ' ' + translatedText;
-
-            const amount = extractAmountWithSpatialAwareness(words, combinedText, similarReceipts);
-            const date = extractDateWithSpatialAwareness(words, imageWidth, imageHeight, similarReceipts);
-
-            const categoryMatch = findCategoryByProduct(combinedText.toLowerCase());
-
-            const parsed: ParsedExpense = {
-                amount: amount || undefined,
-                date: date || undefined,
-                category: categoryMatch?.category,
-                subcategory: categoryMatch?.subcategory,
-                note: 'Receipt scan',
-                confidence: categoryMatch?.confidence || 0
-            };
-
-            console.log('🎯 Final extraction results:', parsed);
-
-            const layout = analyzeReceiptLayout(words, imageWidth, imageHeight);
-            const extractedData = {
-                amount: amount || 0,
-                date: date || new Date().toISOString().split('T')[0],
-                items: []
-            };
-
-            setCurrentParsing(parsed);
-
-            let responseMessage = '';
-            if (userLanguage === 'ro') {
-                responseMessage = `🤖 Am analizat bonul fiscal folosind AI avansat:\n\n`;
-                if (amount) responseMessage += `💰 Sumă detectată: ${amount} RON\n`;
-                if (date) responseMessage += `📅 Data detectată: ${date}\n`;
-                if (categoryMatch?.category) responseMessage += `🗂️ Categorie: ${categoryMatch.category}\n`;
-                if (categoryMatch?.subcategory) responseMessage += `📝 Subcategorie: ${categoryMatch.subcategory}\n`;
-                if (similarReceipts.length > 0) responseMessage += `📚 Folosind experiență din ${similarReceipts.length} bonuri similare\n`;
-                responseMessage += `\n❓ Sunt aceste informații corecte?`;
-            } else {
-                responseMessage = `🤖 I analyzed the receipt using advanced AI:\n\n`;
-                if (amount) responseMessage += `💰 Detected amount: ${amount} RON\n`;
-                if (date) responseMessage += `📅 Detected date: ${date}\n`;
-                if (categoryMatch?.category) responseMessage += `🗂️ Category: ${categoryMatch.category}\n`;
-                if (categoryMatch?.subcategory) responseMessage += `📝 Subcategory: ${categoryMatch.subcategory}\n`;
-                if (similarReceipts.length > 0) responseMessage += `📚 Using experience from ${similarReceipts.length} similar receipts\n`;
-                responseMessage += `\n❓ Is this information correct?`;
-            }
-
-            addMessage(responseMessage, false);
-            speakText(responseMessage);
-
-            const confirmationReplies: QuickReply[] = [
-                {
-                    text: userLanguage === 'ro' ? '✅ Da, salvează și învață' : '✅ Yes, save and learn',
-                    action: () => {
-                        setQuickReplies([]);
-                        setAwaitingInput(null);
-
-                        saveReceiptPattern(ocrText, extractedData, layout);
-
-                        if (parsed.amount && parsed.category && parsed.subcategory && parsed.date) {
-                            saveExpense(parsed);
-                        } else {
-                            if (!generateFollowUpQuestions(parsed)) {
-                                const errorMessage = getLocalizedText('needMoreInfo');
-                                addMessage(errorMessage, false);
-                                speakText(errorMessage);
-                            }
-                        }
-                    }
-                },
-                {
-                    text: userLanguage === 'ro' ? '❌ Nu, corectează' : '❌ No, let me correct',
-                    action: () => {
-                        setQuickReplies([]);
-                        setAwaitingInput(null);
-                        setCurrentParsing(null);
-                        const retryMessage = userLanguage === 'ro' ?
-                            'Te rog să îmi spui valorile corecte pentru ca AI-ul să învețe din această experiență.' :
-                            'Please tell me the correct values so the AI can learn from this experience.';
-                        addMessage(retryMessage, false);
-                        speakText(retryMessage);
-                    }
-                }
-            ];
-
-            setQuickReplies(confirmationReplies);
-            setAwaitingInput('confirmation');
-
-        } catch (error) {
-            console.error('🚨 Enhanced OCR Error:', {
-                message: error?.message,
-                stack: error?.stack,
-                name: error?.name,
-                error: error
+            // Initialize worker with proper configuration
+            const worker = await createOCRWorker((progress: OCRProgress) => {
+                console.log('OCR Progress:', progress);
+                // You can update UI here based on progress if needed
             });
 
-            let errorMessage = userLanguage === 'ro' ?
-                'Nu am putut procesa imaginea cu AI-ul avansat. Te rog să încerci din nou cu o imagine mai clară.' :
-                'Could not process the image with advanced AI. Please try again with a clearer image.';
+            try {
+                // Process the image
+                const result = await worker.recognize(imageUri);
+                console.log('Raw OCR result:', result);
+                
+                // Safely extract and transform the data
+                if (!result?.data) {
+                    throw new Error('No OCR result data was returned. Please try again with a clearer image.');
+                }
 
-            if (error?.message) {
-                if (error.message.includes('NetworkError') || error.message.includes('network')) {
-                    errorMessage = userLanguage === 'ro' ?
-                        'Eroare de rețea. Verifică conexiunea la internet și încearcă din nou.' :
-                        'Network error. Check your internet connection and try again.';
-                } else if (error.message.includes('Worker') || error.message.includes('worker')) {
-                    errorMessage = userLanguage === 'ro' ?
-                        'Eroare la inițializarea AI-ului OCR. Te rog să reîmprospătezi pagina și să încerci din nou.' :
-                        'AI OCR initialization error. Please refresh the page and try again.';
-                } else if (error.message.includes('Permission') || error.message.includes('permission')) {
-                    errorMessage = userLanguage === 'ro' ?
-                        'Nu am permisiuni pentru a accesa camera/fișierele. Verifică setările browserului.' :
-                        'No permission to access camera/files. Check browser settings.';
-                } else {
-                    errorMessage += ` (${error.message})`;
+                const data = result.data;
+                const ocrText = data.text || '';
+                const confidence = data.confidence || 0;
+
+                if (!ocrText.trim()) {
+                    throw new Error('No text was detected in the image. Please try with a clearer image or different lighting conditions.');
+                }
+
+                // Convert TesseractWord[] to OCRWord[] with safe data
+                const words: OCRWord[] = [];
+                if (data.words && Array.isArray(data.words)) {
+                    for (const word of data.words) {
+                        if (word && typeof word.text === 'string' && word.text.trim()) {
+                            words.push({
+                                text: word.text,
+                                confidence: word.confidence || 0,
+                                bbox: {
+                                    x0: word.bbox?.x0 || 0,
+                                    y0: word.bbox?.y0 || 0,
+                                    x1: word.bbox?.x1 || 0,
+                                    y1: word.bbox?.y1 || 0
+                                }
+                            });
+                        }
+                    }
+                }
+
+                if (words.length === 0) {
+                    console.warn('No words were extracted from the image');
+                }
+
+                // Template matching and data extraction
+                const template = matchReceiptTemplate(ocrText);
+                console.log('🔍 Template matching result:', {
+                    matchedTemplate: template?.name || 'No match',
+                    patterns: template ? Object.keys(template.patterns).length : 0
+                });
+
+                const extracted = extractReceiptData(ocrText, template || undefined);
+                console.log('📑 Structured data extraction:', {
+                    total: extracted.total,
+                    date: extracted.date,
+                    itemCount: extracted.items.length,
+                    vatEntries: extracted.vat.length,
+                    confidence: extracted.confidence
+                });
+
+                // Find similar receipts for context
+                const matchResult = await receiptMatchingSystem.findSimilarReceipts(
+                    ocrText,
+                    {
+                        text: ocrText,
+                        confidence,
+                        template: template?.name || ''
+                    },
+                    ''
+                );
+                console.log(`📚 Found ${matchResult.similarReceipts.length} similar receipt patterns`);
+
+                const amount = extracted.total || extractAmountWithSpatialAwareness(words, ocrText, matchResult.similarReceipts);
+                const date = extracted.date || extractDateWithSpatialAwareness(words, data.imageWidth || 1000, data.imageHeight || 1000, matchResult.similarReceipts);
+
+                // Return the processed data
+                return {
+                    text: ocrText,
+                    confidence,
+                    amount,
+                    date,
+                    words,
+                    imageWidth: data.imageWidth || 1000,
+                    imageHeight: data.imageHeight || 1000
+                };
+            } finally {
+                // Clean up worker
+                if (worker) {
+                    await worker.terminate().catch(error => {
+                        console.warn('Failed to terminate worker:', error);
+                    });
                 }
             }
-
-            addMessage(errorMessage, false);
-            speakText(errorMessage);
-        } finally {
-            setIsProcessing(false);
+        } catch (error) {
+            console.error('Error processing receipt image:', error);
+            throw error;
         }
     };
 
@@ -671,7 +601,8 @@ export default function ChatInterface(): JSX.Element {
                     ]
                 );
             }
-        } catch (error) {
+        } catch (err) {
+            const error = err as Error;
             console.error('Receipt scan error:', error);
             Alert.alert('Error', `Failed to start receipt scan: ${error.message || 'Unknown error'}`);
         }

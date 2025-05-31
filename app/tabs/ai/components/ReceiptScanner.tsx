@@ -1,20 +1,7 @@
-
 import React, { useState, useRef } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    Alert,
-    ActivityIndicator,
-    ScrollView,
-    ImageBackground,
-    Platform,
-    Modal,
-} from 'react-native';
+import {View,Text,StyleSheet,TouchableOpacity,Alert,ActivityIndicator,ScrollView,ImageBackground,Platform,Modal,Image,} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { createWorker } from 'tesseract.js';
 import { findCategoryByProduct } from '../../../../lib/productAssociation';
 import { addDoc, collection } from 'firebase/firestore';
 import { auth, db } from '../../../../lib/firebase';
@@ -22,12 +9,15 @@ import { receiptLearningSystem, OCRWord } from '../../../../lib/receiptLearning'
 import { receiptFeedbackSystem, ReceiptImprovementSuggestion } from '../../../../lib/receiptFeedback';
 import { receiptStorageSystem } from '../../../../lib/receiptStorage';
 import { DeveloperAnnotationModal } from '../../../../lib/developerAnnotations';
-import { receiptMatchingSystem, MatchResult } from '../../../../lib/receiptMatching';
+import { ReceiptMatchingSystem } from '../../../../lib/receiptMatching';
+import { createOCRWorker, OCRProgress, TesseractResult } from '../utils/ocrConfig';
 import bg from '@assets/bg/AIback.png';
 
 import ImageCapture from './receipt/ImageCapture';
 import ExtractionResults from './receipt/ExtractionResults';
 import { translateText, extractAmountFromText, extractDateFromText } from '../utils/receiptTextExtraction';
+
+const receiptMatchingSystem = new ReceiptMatchingSystem();
 
 interface ExtractedData {
     amount?: number;
@@ -45,6 +35,10 @@ interface ExtractedData {
 
 interface ReceiptScannerProps {
     onBack: () => void;
+}
+
+interface OCRError extends Error {
+    message: string;
 }
 
 export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Element {
@@ -125,225 +119,159 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
 
     const processImage = async (imageUri: string) => {
         setIsProcessing(true);
-        setExtractedData(null);
-        setLearningTips(receiptFeedbackSystem.generateImprovementTips());
+        let worker;
 
         try {
-            console.log('🚀 Starting intelligent OCR processing...');
-
-            if (!workerRef.current) {
-                console.log('🤖 Initializing enhanced Tesseract worker...');
-                workerRef.current = await createWorker(['eng', 'ron']);
-
-                // Enhanced parameters for receipt scanning
-                await workerRef.current.setParameters({
-                    tessedit_pageseg_mode: '6',
-                    tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĂÂÎȘȚăâîșț.,:-+/\\ ()€$',
-                    preserve_interword_spaces: '1'
-                });
-            }
-
-            // Get detailed OCR results including word positions
-            const { data } = await workerRef.current.recognize(imageUri);
-            const ocrText = data.text;
-            const confidence = data.confidence;
-
-            // Extract words with spatial information (handle undefined data.words)
-            const words: OCRWord[] = [];
-            console.log('📊 OCR data structure:', {
-                hasWords: !!data.words,
-                wordsType: typeof data.words,
-                isArray: Array.isArray(data.words),
-                dataKeys: Object.keys(data)
+            // Initialize worker with proper configuration
+            worker = await createOCRWorker((progress: OCRProgress) => {
+                console.log('[ReceiptScanner] OCR Progress:', progress);
+                // You can update UI here based on progress if needed
             });
 
-            if (data.words && Array.isArray(data.words)) {
-                data.words
-                    .filter((word: any) => word && word.text && word.text.trim().length > 0)
-                    .forEach((word: any) => {
-                        words.push({
-                            text: word.text,
-                            confidence: word.confidence || 0,
-                            bbox: word.bbox || { x0: 0, y0: 0, x1: 0, y1: 0 }
-                        });
-                    });
-            } else {
-                console.log('⚠️ No spatial word data available, using fallback extraction');
-            }
+            try {
+                // Process the image
+                const result = await worker.recognize(imageUri);
+                console.log('[ReceiptScanner] Raw OCR result:', result);
 
-            setOcrWords(words);
-
-            // Get image dimensions (simplified - in real implementation you'd get actual dimensions)
-            const imageWidth = 1000;
-            const imageHeight = 1200;
-            setImageSize({ width: imageWidth, height: imageHeight });
-
-            console.log(`📝 OCR Results: "${ocrText}" (confidence: ${confidence}%)`);
-            console.log(`📊 Extracted ${words.length} words with spatial data`);
-
-            // Use intelligent extraction system or fallback
-            let intelligentResults;
-            if (words.length > 0) {
-                intelligentResults = receiptLearningSystem.extractReceiptData(
-                    words,
-                    imageWidth,
-                    imageHeight,
-                    ocrText
-                );
-            } else {
-                // Fallback extraction when spatial data is not available
-                console.log('📋 Using fallback extraction (no spatial data)');
-                intelligentResults = {
-                    amount: extractAmountFromText(ocrText),
-                    date: extractDateFromText(ocrText),
-                    merchant: null,
-                    confidence: confidence,
-                    layout: null,
-                    similarPatterns: []
-                };
-            }
-
-            // Check for similar receipts and apply learned patterns
-            const user = auth.currentUser;
-            let enhancedResults = intelligentResults;
-            let currentMatchResult: MatchResult | null = null;
-
-            if (user) {
-                console.log('🔍 Checking for similar receipt patterns...');
-                currentMatchResult = await receiptMatchingSystem.findSimilarReceipts(
-                    ocrText,
-                    {
-                        ...intelligentResults,
-                        rawText: ocrText,
-                        confidence: confidence
-                    },
-                    user.uid
-                );
-
-                setMatchResult(currentMatchResult);
-
-                if (currentMatchResult.isMatch) {
-                    console.log(`🎯 Found matching pattern with ${currentMatchResult.confidence}% confidence`);
-                    enhancedResults = receiptMatchingSystem.applyLearnedRules(
-                        intelligentResults,
-                        currentMatchResult
-                    );
+                if (!result?.data) {
+                    throw new Error('OCR completed but no data was returned. Please try again with a clearer image.');
                 }
 
-                // Check for developer suggestions (dev mode only)
-                if (__DEV__) {
-                    const devSuggestions = await receiptMatchingSystem.getDeveloperSuggestions(
-                        currentMatchResult,
-                        user.uid
-                    );
+                // Log the structure of the result
+                console.log('[ReceiptScanner] 📊 OCR Result structure:', {
+                    hasData: !!result.data,
+                    dataKeys: Object.keys(result.data),
+                    hasText: !!result.data.text,
+                    hasWords: Array.isArray(result.data.words),
+                    wordsLength: result.data.words?.length
+                });
 
-                    if (devSuggestions.showSuggestion) {
-                        setDeveloperSuggestionData(devSuggestions.suggestionData);
-                        console.log('💡 Developer suggestion available for layout matching');
+                // Ensure we have the data object
+                const data = result.data;
+                const ocrText = data.text || '';
+                const confidence = data.confidence || 0;
+
+                if (!ocrText.trim()) {
+                    throw new Error('No text was detected in the image. Please try with a clearer image or different lighting conditions.');
+                }
+
+                // Extract words with spatial information
+                const words: OCRWord[] = [];
+                
+                // Safely process words if they exist
+                if (data.words && Array.isArray(data.words)) {
+                    for (const word of data.words) {
+                        if (word && typeof word.text === 'string' && word.text.trim()) {
+                            words.push({
+                                text: word.text,
+                                confidence: word.confidence || 0,
+                                bbox: word.bbox || { x0: 0, y0: 0, x1: 0, y1: 0 }
+                            });
+                        }
                     }
                 }
-            }
 
-            // Translate Romanian text to English for better category detection
-            const translatedText = await translateText(ocrText);
-            const combinedText = ocrText + ' ' + translatedText;
-
-            // Detect category using existing logic
-            const categoryMatch = findCategoryByProduct(combinedText.toLowerCase());
-
-            const extracted: ExtractedData = {
-                amount: enhancedResults.amount || undefined,
-                date: enhancedResults.date || undefined,
-                category: categoryMatch?.category,
-                subcategory: categoryMatch?.subcategory,
-                rawText: ocrText,
-                confidence: enhancedResults.confidence,
-                merchantName: enhancedResults.merchant?.name,
-                layout: enhancedResults.layout,
-                words: words,
-                imageWidth: imageWidth,
-                imageHeight: imageHeight
-            };
-
-            setExtractedData(extracted);
-            setEditableAmount(enhancedResults.amount?.toString() || '');
-            setEditableDate(enhancedResults.date || '');
-
-            // Show matching info in console for debugging
-            if (currentMatchResult?.isMatch) {
-                console.log('🤖 Applied learned extraction rules:', currentMatchResult.suggestedExtraction);
-            }
-
-            // If confidence is low, prepare feedback form
-            if (intelligentResults.confidence < 70) {
-                const suggestions = receiptFeedbackSystem.generateFeedbackQuestions(ocrText, extracted);
-                setFeedbackSuggestions(suggestions);
-            }
-
-            if (!intelligentResults.date) {
-                setAwaitingDateInput(true);
-            }
-
-            setShowConfirmation(true);
-
-        } catch (error) {
-            console.error('🚨 Enhanced OCR Error:', error);
-
-            // When OCR completely fails, still create extractedData with empty values
-            // so the user can fill in everything manually
-            const failedExtractedData: ExtractedData = {
-                amount: undefined,
-                date: undefined,
-                category: undefined,
-                subcategory: undefined,
-                rawText: 'OCR_FAILED',
-                confidence: 0,
-                merchantName: undefined,
-                layout: undefined,
-                words: [],
-                imageWidth: 1000,
-                imageHeight: 1200
-            };
-
-            setExtractedData(failedExtractedData);
-            setEditableAmount('');
-            setEditableDate('');
-            setAwaitingDateInput(true); // Force user to enter date
-
-            // Save the failed attempt for learning
-            try {
-                console.log('💾 Saving failed OCR attempt for learning...');
-                const user = auth.currentUser;
-                if (user) {
-                    const failedMetadata = receiptStorageSystem.createMetadataFromOCR(
-                        'OCR_FAILED',
-                        failedExtractedData,
-                        null,
-                        { ocrFailed: true, error: error.message }
-                    );
-
-                    const savedReceipt = await receiptStorageSystem.saveReceiptWithMetadata(
-                        imageUri,
-                        {
-                            ...failedMetadata,
-                            receiptQuality: 'poor'
-                        }
-                    );
-
-                    setSavedReceiptId(savedReceipt.firestoreId);
-                    console.log('💾 Failed OCR attempt saved with ID:', savedReceipt.id);
+                if (words.length === 0) {
+                    console.warn('[ReceiptScanner] No words were extracted from the image');
                 }
-            } catch (saveError) {
-                console.error('Failed to save OCR failure:', saveError);
+
+                console.log(`📊 Extracted ${words.length} words`);
+
+                try {
+                    // Process the extracted data
+                    const intelligentResults = receiptLearningSystem.extractReceiptData(words, data.imageWidth || 1000, data.imageHeight || 1000, ocrText);
+                    console.log('🧠 Intelligent processing results:', intelligentResults);
+
+                    // Get layout analysis
+                    const layout = receiptLearningSystem.analyzeReceiptLayout(words, data.imageWidth || 1000, data.imageHeight || 1000);
+                    console.log('📐 Layout analysis:', layout);
+
+                    // Find similar receipts
+                    const matchResult = await receiptMatchingSystem.findSimilarReceipts(
+                        ocrText,
+                        {
+                            text: ocrText,
+                            confidence,
+                            template: ''
+                        },
+                        auth.currentUser?.uid || ''
+                    );
+                    console.log('🔍 Pattern matching result:', matchResult);
+
+                    // Apply learned rules
+                    const enhancedResults = receiptMatchingSystem.applyLearnedRules(intelligentResults, matchResult);
+                    console.log('✨ Enhanced results:', enhancedResults);
+
+                    // Get category suggestions
+                    const categoryMatch = findCategoryByProduct(ocrText.toLowerCase());
+                    console.log('🏷️ Category match:', categoryMatch);
+
+                    const extracted: ExtractedData = {
+                        amount: enhancedResults.amount || undefined,
+                        date: enhancedResults.date || undefined,
+                        category: categoryMatch?.category,
+                        subcategory: categoryMatch?.subcategory,
+                        rawText: ocrText,
+                        confidence: enhancedResults.confidence,
+                        merchantName: enhancedResults.merchant?.name,
+                        layout: enhancedResults.layout,
+                        words: words,
+                        imageWidth: data.imageWidth || 1000,
+                        imageHeight: data.imageHeight || 1000
+                    };
+
+                    setExtractedData(extracted);
+                    setEditableAmount(enhancedResults.amount?.toString() || '');
+                    setEditableDate(enhancedResults.date || '');
+
+                    // Show matching info in console for debugging
+                    if (matchResult.isMatch) {
+                        console.log('🤖 Applied learned extraction rules:', matchResult.suggestedExtraction);
+                    }
+
+                    // If confidence is low, prepare feedback form
+                    if (intelligentResults.confidence < 70) {
+                        const suggestions = receiptFeedbackSystem.generateFeedbackQuestions(ocrText, extracted);
+                        setFeedbackSuggestions(suggestions);
+                    }
+
+                    if (!intelligentResults.date) {
+                        setAwaitingDateInput(true);
+                    }
+
+                    setShowConfirmation(true);
+                } catch (processingError) {
+                    console.error('[ReceiptScanner] Error during data processing:', processingError);
+                    // Even if processing fails, we still have the OCR text, so create a basic extraction
+                    const extracted: ExtractedData = {
+                        rawText: ocrText,
+                        confidence: confidence,
+                        words: words,
+                        imageWidth: data.imageWidth || 1000,
+                        imageHeight: data.imageHeight || 1000
+                    };
+                    setExtractedData(extracted);
+                    setAwaitingDateInput(true);
+                    setShowConfirmation(true);
+                    Alert.alert(
+                        'Partial Processing',
+                        'The receipt was scanned but some information could not be automatically extracted. Please enter the details manually.',
+                        [{ text: 'OK' }]
+                    );
+                }
+            } finally {
+                // Clean up worker
+                if (worker) {
+                    await worker.terminate().catch(error => {
+                        console.warn('[ReceiptScanner] Failed to terminate worker:', error);
+                    });
+                }
             }
-
-            // Show confirmation form so user can enter ALL data manually
-            setShowConfirmation(true);
-
-            // Show alert explaining what happened
+        } catch (error) {
+            console.error('[ReceiptScanner] Error processing image:', error);
             Alert.alert(
-                'OCR Failed',
-                'I couldn\'t read this receipt at all. Please enter the amount and date manually, then I\'ll save it and learn from this failure.',
+                'Error',
+                error instanceof Error ? error.message : 'Failed to process the receipt. Please try again.',
                 [{ text: 'OK' }]
             );
         } finally {
@@ -527,8 +455,8 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
             console.log('💰 Saving expense data:', expenseData);
             await addDoc(collection(db, 'expenses'), expenseData);
 
-            // Save successful pattern for learning (existing logic)
-            if (extractedData.words && extractedData.words.length > 0) {
+            // Save successful pattern for learning if we have word data
+            if (extractedData?.words && extractedData.words.length > 0) {
                 receiptLearningSystem.saveSuccessfulPattern(
                     extractedData.rawText,
                     selectedImage,
@@ -538,8 +466,8 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
                     {
                         amount: parseFloat(editableAmount),
                         date: finalDate,
-                        category: extractedData.category,
-                        subcategory: extractedData.subcategory
+                        category: extractedData.category || 'Other',
+                        subcategory: extractedData.subcategory || 'Miscellaneous'
                     },
                     Object.keys(userCorrections).some(key => userCorrections[key as keyof typeof userCorrections] !== undefined) ? userCorrections : undefined
                 );
@@ -547,7 +475,7 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
 
             // Show success message with developer options
             const hasCorrections = Object.keys(userCorrections).some(key => userCorrections[key as keyof typeof userCorrections] !== undefined);
-            const showDevOptions = __DEV__ && (hasCorrections || extractedData.confidence < 80);
+            const showDevOptions = __DEV__ && (hasCorrections || (extractedData?.confidence || 0) < 80);
             const hasDeveloperSuggestion = __DEV__ && developerSuggestionData;
 
             const alertButtons = [{ text: 'OK', onPress: () => resetScanner() }];
@@ -575,7 +503,7 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
             );
 
             // If there were low confidence or user corrections, potentially ask for feedback
-            if (hasCorrections || extractedData.confidence < 70) {
+            if (hasCorrections || (extractedData?.confidence || 0) < 70) {
                 setTimeout(() => {
                     if (feedbackSuggestions.length > 0 && !showDevOptions) {
                         setShowFeedbackForm(true);
@@ -584,7 +512,7 @@ export default function ReceiptScanner({ onBack }: ReceiptScannerProps): JSX.Ele
             }
 
         } catch (error) {
-            console.error('Error saving expense:', error);
+            console.error('Error saving expense:', error instanceof Error ? error.message : 'Unknown error');
             Alert.alert('Error', 'Failed to save expense. Please try again.');
         }
     };

@@ -1,4 +1,3 @@
-
 import { OCRWord } from '../hooks/useOCR';
 
 export const detectMerchantAdvanced = (text: string): { name: string; type: string; confidence: number } | null => {
@@ -48,6 +47,19 @@ export const detectMerchantAdvanced = (text: string): { name: string; type: stri
 };
 
 export const analyzeReceiptLayout = (words: OCRWord[], imageWidth: number, imageHeight: number) => {
+    if (!Array.isArray(words)) {
+        console.warn('Words parameter is not an array in analyzeReceiptLayout');
+        return {
+            dateRegions: [],
+            priceRegions: [],
+            itemLines: [],
+            topSection: [],
+            bottomSection: [],
+            rightSection: [],
+            leftSection: []
+        };
+    }
+
     console.log('📐 Analyzing receipt layout with', words.length, 'words');
 
     const layout = {
@@ -66,13 +78,22 @@ export const analyzeReceiptLayout = (words: OCRWord[], imageWidth: number, image
     const leftX = imageWidth * 0.25;
 
     words.forEach(word => {
-        const centerX = (word.bbox.x0 + word.bbox.x1) / 2;
-        const centerY = (word.bbox.y0 + word.bbox.y1) / 2;
+        if (!word || typeof word.text !== 'string') return;
 
-        if (centerY < topY) layout.topSection.push(word);
-        if (centerY > bottomY) layout.bottomSection.push(word);
-        if (centerX > rightX) layout.rightSection.push(word);
-        if (centerX < leftX) layout.leftSection.push(word);
+        const centerX = (word.bbox?.x0 ?? 0 + word.bbox?.x1 ?? 0) / 2;
+        const centerY = (word.bbox?.y0 ?? 0 + word.bbox?.y1 ?? 0) / 2;
+
+        if (centerY < topY) {
+            layout.topSection.push(word);
+        } else if (centerY > bottomY) {
+            layout.bottomSection.push(word);
+        }
+
+        if (centerX > rightX) {
+            layout.rightSection.push(word);
+        } else if (centerX < leftX) {
+            layout.leftSection.push(word);
+        }
 
         const datePattern = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/;
         if (datePattern.test(word.text)) {
@@ -118,11 +139,18 @@ export const analyzeReceiptLayout = (words: OCRWord[], imageWidth: number, image
 };
 
 export const extractProductLines = (words: OCRWord[]): Array<{ words: OCRWord[]; y: number }> => {
+    if (!Array.isArray(words)) {
+        console.warn('Words parameter is not an array in extractProductLines');
+        return [];
+    }
+
     const lines: Array<{ words: OCRWord[]; y: number }> = [];
     const tolerance = 10;
 
     words.forEach(word => {
-        const wordY = word.bbox.y0;
+        if (!word || !word.bbox) return;
+
+        const wordY = word.bbox.y0 ?? 0;
         let addedToLine = false;
 
         for (const line of lines) {
@@ -140,7 +168,9 @@ export const extractProductLines = (words: OCRWord[]): Array<{ words: OCRWord[];
 
     lines.sort((a, b) => a.y - b.y);
     lines.forEach(line => {
-        line.words.sort((a, b) => a.bbox.x0 - b.bbox.x0);
+        if (Array.isArray(line.words)) {
+            line.words.sort((a, b) => (a.bbox?.x0 ?? 0) - (b.bbox?.x0 ?? 0));
+        }
     });
 
     return lines;
