@@ -424,4 +424,37 @@ export default StyleSheet.create({
         textAlign: 'center',
         fontFamily: 'Fredoka',
     },
+    achievementHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 20,
+        backgroundColor: '#FFF2D8',
+        borderRadius: 16,
+        padding: 16,
+    },
+    achievementIcon: {
+        width: 80,
+        height: 80,
+        marginRight: 16,
+    },
+    achievementStats: {
+        flex: 1,
+    },
+    achievementRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    achievementValue: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#91483C',
+        fontFamily: 'Fredoka',
+        marginRight: 8,
+    },
+    achievementLabel: {
+        fontSize: 14,
+        color: '#8B6914',
+        fontFamily: 'Fredoka',
+    },
 });

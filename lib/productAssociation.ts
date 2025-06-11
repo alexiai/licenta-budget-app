@@ -3,12 +3,43 @@ export interface ProductAssociation {
     category: string;
     subcategory: string;
     confidence: number;
+    contextKeywords?: string[]; // Keywords for context matching
 }
 
+export interface ReceiptContext {
+    timestamp: Date;
+    merchantName?: string;
+    category?: string;
+    subcategory?: string;
+    amount?: number;
+}
+
+// Add Romanian context keywords
+const CONTEXT_KEYWORDS = {
+    timeContext: {
+        recent: ['ultima', 'precedenta', 'anterioara', 'de dinainte', 'de mai devreme'],
+        today: ['azi', 'astazi', 'de azi', 'din ziua asta'],
+        yesterday: ['ieri', 'de ieri', 'din ziua precedenta'],
+    },
+    referenceContext: {
+        receipt: ['bon', 'bonul', 'chitanta', 'chitanța', 'factura', 'nota', 'documentul'],
+        expense: ['cheltuiala', 'plata', 'tranzactia', 'tranzacția', 'cumparaturi', 'cumpărături'],
+    }
+};
+
 export const productAssociations: ProductAssociation[] = [
-    // TRANSPORT - GAS/FUEL
+    // TRANSPORT - GAS/FUEL - Enhanced with more Romanian terms
     {
-        keywords: ['benzinărie', 'benzină', 'combustibil', 'motorină', 'diesel', 'gpl', 'carburant', 'alimentare', 'plin', 'rezervor', 'pompă', 'staţie carburant', 'staţie peco', 'peco', 'petrom', 'lukoil', 'omv', 'rompetrol', 'mol', 'socar'],
+        keywords: [
+            'benzinărie', 'benzină', 'combustibil', 'motorină', 'diesel', 'gpl', 'carburant', 
+            'alimentare', 'plin', 'rezervor', 'pompă', 'staţie carburant', 'staţie peco', 
+            'peco', 'petrom', 'lukoil', 'omv', 'rompetrol', 'mol', 'socar', 'plinul', 
+            'alimentat', 'carburanți', 'stație', 'pompa', 'rezervorul', 'benzina'
+        ],
+        contextKeywords: [
+            'la pompa', 'la statie', 'la peco', 'de benzina', 'de motorina',
+            'plinul de combustibil', 'alimentarea', 'bonul de la benzinarie'
+        ],
         category: 'Transport',
         subcategory: 'Gas',
         confidence: 95
@@ -46,9 +77,20 @@ export const productAssociations: ProductAssociation[] = [
         confidence: 90
     },
 
-    // FOOD & DRINKS - GROCERIES
+    // FOOD & DRINKS - GROCERIES - Enhanced with more Romanian terms
     {
-        keywords: ['kaufland', 'carrefour', 'mega image', 'auchan', 'lidl', 'penny', 'profi', 'cora', 'real', 'selgros', 'metro', 'magazin', 'supermarket', 'hipermarket', 'cumpărături', 'shopping', 'alimente', 'băcănie', 'market', 'lapte', 'pâine', 'ouă', 'brânză', 'carne', 'legume', 'fructe', 'conserve', 'cereale', 'paste', 'orez', 'zahăr', 'sare', 'ulei', 'unt', 'iaurt', 'smântână', 'măsline', 'ton', 'sardine', 'biscuiți', 'ciocolată', 'bomboane', 'gumă', 'detergent', 'săpun', 'șampon', 'pastă de dinți', 'hârtie igienică', 'servetele'],
+        keywords: [
+            'kaufland', 'carrefour', 'mega image', 'auchan', 'lidl', 'penny', 'profi', 
+            'cora', 'real', 'selgros', 'metro', 'magazin', 'supermarket', 'hipermarket', 
+            'cumpărături', 'shopping', 'alimente', 'băcănie', 'market', 'lapte', 'pâine', 
+            'ouă', 'brânză', 'carne', 'legume', 'fructe', 'conserve', 'cereale', 'paste', 
+            'orez', 'zahăr', 'sare', 'ulei', 'unt', 'iaurt', 'smântână', 'măsline', 
+            'alimentara', 'magazin alimentar', 'la magazin', 'cumparaturi'
+        ],
+        contextKeywords: [
+            'bonul de la magazin', 'cumparaturile de la', 'de la supermarket',
+            'factura de la', 'chitanta de la magazin'
+        ],
         category: 'Food & Drinks',
         subcategory: 'Groceries',
         confidence: 80
@@ -88,7 +130,7 @@ export const productAssociations: ProductAssociation[] = [
 
     // FOOD & DRINKS - DESSERTS/SNACKS
     {
-        keywords: ['gogoașă', 'gogoasa', 'gogoși', 'gogosi', 'donut', 'donuts', 'papanași', 'papanasi', 'clătite', 'clatite', 'pancakes', 'vafe', 'waffles', 'churros', 'ecler', 'eclere', 'profiterol', 'cremșnit', 'cremsnit', 'savarina', 'cozonac', 'mucenici', 'colaci', 'covrig', 'covrigi', 'bagel', 'croissant', 'briosa', 'briose', 'muffin', 'cupcake', 'brownie', 'cookies', 'biscuit', 'înghețată', 'inghetata', 'gelato', 'desert', 'deserturi', 'dulciuri', 'bomboane', 'prăjituri', 'prajituri', 'tort', 'ciocolată', 'ciocolata'],
+        keywords: ['gogoașă', 'gogoasa', 'gogosi', 'gogosi', 'donut', 'donuts', 'papanași', 'papanasi', 'clătite', 'clatite', 'pancakes', 'vafe', 'waffles', 'churros', 'ecler', 'eclere', 'profiterol', 'cremșnit', 'cremsnit', 'savarina', 'cozonac', 'mucenici', 'colaci', 'covrig', 'covrigi', 'bagel', 'croissant', 'briosa', 'briose', 'muffin', 'cupcake', 'brownie', 'cookies', 'biscuit', 'înghețată', 'inghetata', 'gelato', 'desert', 'deserturi', 'dulciuri', 'bomboane', 'prăjituri', 'prajituri', 'tort', 'ciocolată', 'ciocolata'],
         category: 'Food & Drinks',
         subcategory: 'Groceries',
         confidence: 85
@@ -266,6 +308,64 @@ export const findCategoryByProduct = (text: string): { category: string; subcate
     }
 
     return null;
+};
+
+// Add context-aware search function
+export const findCategoryByContext = (
+    text: string,
+    recentReceipts: ReceiptContext[],
+    maxAge: number = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+): { category: string; subcategory: string; confidence: number } | null => {
+    const textLower = text.toLowerCase();
+    const now = new Date();
+
+    // Check for time context references
+    const hasRecentReference = CONTEXT_KEYWORDS.timeContext.recent.some(kw => textLower.includes(kw));
+    const hasTodayReference = CONTEXT_KEYWORDS.timeContext.today.some(kw => textLower.includes(kw));
+    const hasYesterdayReference = CONTEXT_KEYWORDS.timeContext.yesterday.some(kw => textLower.includes(kw));
+
+    // Check for receipt/expense references
+    const hasReceiptReference = CONTEXT_KEYWORDS.referenceContext.receipt.some(kw => textLower.includes(kw));
+    const hasExpenseReference = CONTEXT_KEYWORDS.referenceContext.expense.some(kw => textLower.includes(kw));
+
+    if (hasRecentReference || hasTodayReference || hasYesterdayReference) {
+        // Filter receipts by time context
+        const relevantReceipts = recentReceipts.filter(receipt => {
+            const age = now.getTime() - receipt.timestamp.getTime();
+            if (hasYesterdayReference) {
+                const isYesterday = new Date(receipt.timestamp).toDateString() === 
+                    new Date(now.setDate(now.getDate() - 1)).toDateString();
+                return isYesterday;
+            }
+            if (hasTodayReference) {
+                const isToday = new Date(receipt.timestamp).toDateString() === new Date().toDateString();
+                return isToday;
+            }
+            return age <= maxAge;
+        });
+
+        // Try to match with recent receipts
+        for (const receipt of relevantReceipts) {
+            if (receipt.category && receipt.subcategory) {
+                // Look for category-specific context keywords
+                const categoryAssociation = productAssociations.find(
+                    assoc => assoc.category === receipt.category && 
+                            assoc.subcategory === receipt.subcategory
+                );
+
+                if (categoryAssociation?.contextKeywords?.some(kw => textLower.includes(kw))) {
+                    return {
+                        category: receipt.category,
+                        subcategory: receipt.subcategory,
+                        confidence: 90
+                    };
+                }
+            }
+        }
+    }
+
+    // Fall back to regular keyword matching
+    return findCategoryByProduct(text);
 };
 
 export default productAssociations;

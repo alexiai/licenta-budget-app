@@ -6,6 +6,30 @@ export default StyleSheet.create({
         padding: 20,
         backgroundColor: '#FFE8B0',
     },
+    fixedHeader: {
+        marginBottom: 10,
+    },
+    topRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 10,
+    },
+    budgetSelectorWrapper: {
+        flex: 1,
+        marginLeft: 20,
+        marginRight: 10,
+    },
+    editButton: {
+        padding: 8,
+        borderRadius: 20,
+        backgroundColor: '#ffe599',
+        borderWidth: 2,
+        borderColor: '#eda82f',
+    },
+    editableExpense: {
+        opacity: 0.8,
+    },
     title: {
         fontSize: 37,
         fontWeight: '900',
@@ -97,7 +121,7 @@ export default StyleSheet.create({
         marginBottom: 2,
     },
     amountText: {
-        fontSize: 24,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#D45920',
         fontFamily: 'Fredoka',
@@ -109,11 +133,10 @@ export default StyleSheet.create({
         gap: 4,
     },
     carrotCoinText: {
-        fontSize: 15,
+        fontSize: 12,
+        color: '#91483c',
         fontFamily: 'Fredoka',
-        letterSpacing: -1.2,
-        marginTop: 3,
-        color: '#D45920',
+        textAlign: 'right',
     },
     addBtnWrapper: {
         position: 'absolute',
@@ -154,7 +177,7 @@ export default StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        marginTop: 10,
+        marginBottom: 15,
     },
     periodArrow: {
         padding: 10,

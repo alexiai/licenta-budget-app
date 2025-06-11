@@ -1,4 +1,3 @@
-
 // app/tabs/_layout.tsx
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +8,9 @@ export default function TabsLayout() {
         <Tabs
             screenOptions={{
                 headerShown: false,
+                headerStyle: {
+                    height: 0,
+                },
                 tabBarShowLabel: false,
                 tabBarActiveTintColor: '#FF6F61',
                 tabBarInactiveTintColor: '#B8860B',

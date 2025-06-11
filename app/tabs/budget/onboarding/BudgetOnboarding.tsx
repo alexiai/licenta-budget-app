@@ -1,50 +1,58 @@
-import { View, Text, Alert } from 'react-native';
-import { useState, useEffect } from 'react';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import React, { useState, useEffect } from 'react';
+import { View, Alert, StyleSheet, TouchableOpacity, Text, ImageBackground } from 'react-native';
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { collection, doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '@lib/firebase';
 import BasicInfoStep from './steps/BasicInfoStep';
 import IncomeStep from './steps/IncomeStep';
 import ExpensesStep from './steps/ExpensesStep';
 import SummaryStep from './steps/SummaryStep';
-import { auth, db } from '../../../../lib/firebase';
-import { collection, doc, setDoc } from 'firebase/firestore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import bg from '@assets/bg/basicinfobackground.png';
+import { Ionicons } from '@expo/vector-icons';
 
-
+interface FormData {
+    name: string;
+    period: string;
+    startDay: string;
+    incomes: Array<{ type: string; amount: string }>;
+    categories: Array<{
+        name: string;
+        subcategories: Array<{ name: string; amount: string }>;
+    }>;
+}
 
 export default function BudgetOnboarding() {
     const router = useRouter();
-    const { mode = 'onboarding' } = useLocalSearchParams(); // citim param din URL
-
     const [step, setStep] = useState(0);
-    const [initialized, setInitialized] = useState(false); // evită dublu mount
-    const [formData, setFormData] = useState({
+    const [initialized, setInitialized] = useState(false);
+    const [mode, setMode] = useState<'create' | 'edit'>('create');
+    const [formData, setFormData] = useState<FormData>({
         name: '',
-        period: '',
-        startDay: '',
+        period: 'monthly',
+        startDay: '1',
         incomes: [],
         categories: [],
     });
 
     useEffect(() => {
-        console.log('⚙️ useEffect → mode:', mode);
-        // dacă vrei să faci ceva diferit în funcție de mod, poți aici
-        setInitialized(true);
+        const init = async () => {
+            const hasJustCreated = await AsyncStorage.getItem('hasJustCreatedBudget');
+            if (hasJustCreated === 'true') {
+                await AsyncStorage.removeItem('hasJustCreatedBudget');
+                router.replace('/tabs/budget');
+            }
+            setInitialized(true);
+        };
+        init();
     }, []);
 
-    const updateData = (newData) => {
-        console.log('📝 updateData called with:', newData);
-        setFormData((prev) => ({ ...prev, ...newData }));
+    const updateData = (updates: Partial<FormData>) => {
+        setFormData((prev) => ({ ...prev, ...updates }));
     };
 
-    const goToNext = () => {
-        console.log(`➡️ Going to next step: ${step} → ${step + 1}`);
-        setStep((s) => s + 1);
-    };
-
-    const goToPrev = () => {
-        console.log(`⬅️ Going back from step: ${step}`);
-        setStep((s) => Math.max(0, s - 1));
-    };
+    const goToNext = () => setStep((prev) => prev + 1);
+    const goToPrev = () => setStep((prev) => prev - 1);
 
     const saveToFirebase = async () => {
         console.log('💾 Saving budget to Firebase...');
@@ -78,29 +86,78 @@ export default function BudgetOnboarding() {
         }
     };
 
-    console.log('🧮 Current Step:', step);
+    const handleCancel = () => {
+        Alert.alert(
+            'Cancel Budget Creation',
+            'Are you sure you want to cancel? All progress will be lost.',
+            [
+                {
+                    text: 'No, Continue',
+                    style: 'cancel',
+                },
+                {
+                    text: 'Yes, Cancel',
+                    style: 'destructive',
+                    onPress: () => router.back(),
+                },
+            ]
+        );
+    };
 
     if (!initialized) {
-        console.log('🕒 Waiting for useEffect...');
-        return null; // evită flash înainte de useEffect
+        return null;
     }
 
-    console.log('📍 Current Step:', step);
     return (
-        <View
-            style={{
-                flex: 1,
-                backgroundColor: '#121212',
-                padding: 20,
-                minHeight: 600,
-                borderWidth: 3,
-                borderColor: mode === 'create' ? 'green' : 'red',
-            }}
-        >
-            {step === 0 && <BasicInfoStep data={formData} updateData={updateData} onNext={goToNext} />}
-            {step === 1 && <IncomeStep data={formData} updateData={updateData} onNext={goToNext} onBack={goToPrev} />}
-            {step === 2 && <ExpensesStep data={formData} updateData={updateData} onNext={goToNext} />}
-            {step === 3 && <SummaryStep data={formData} onFinish={saveToFirebase} />}
-        </View>
+        <ImageBackground source={bg} style={styles.container} resizeMode="cover">
+            <View style={styles.header}>
+                <TouchableOpacity style={styles.backButton} onPress={handleCancel}>
+                    <Ionicons name="arrow-back" size={24} color="#91483C" />
+                    <Text style={styles.backButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.stepIndicator}>Step {step + 1} of 4</Text>
+            </View>
+
+            <View style={styles.content}>
+                {step === 0 && <BasicInfoStep data={formData} updateData={updateData} onNext={goToNext} />}
+                {step === 1 && <IncomeStep data={formData} updateData={updateData} onNext={goToNext} onBack={goToPrev} />}
+                {step === 2 && <ExpensesStep data={formData} updateData={updateData} onNext={goToNext} onBack={goToPrev} />}
+                {step === 3 && <SummaryStep data={formData} onFinish={saveToFirebase} onBack={goToPrev} />}
+            </View>
+        </ImageBackground>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#fefaf6',
+    },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+    },
+    backButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 8,
+    },
+    backButtonText: {
+        marginLeft: 8,
+        fontSize: 16,
+        color: '#91483C',
+        fontWeight: '600',
+    },
+    stepIndicator: {
+        fontSize: 16,
+        color: '#91483C',
+        fontWeight: '600',
+    },
+    content: {
+        flex: 1,
+    },
+});

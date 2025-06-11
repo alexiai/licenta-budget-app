@@ -5,9 +5,11 @@ import {
     StyleSheet,
     ScrollView,
     Image,
+    Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SpendingAnalysis } from './SmartAdviceSection';
+import { LinearGradient } from 'expo-linear-gradient';
 import statsImg from '@assets/decor/aiStats.png';
 
 interface WeeklyStatsCardProps {
@@ -38,41 +40,65 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
         );
     }
 
-    const { weeklyStats, totalThisMonth, averageDailySpending, spendingPatterns } = analysis;
+    const {
+        weeklyStats,
+        spendingPatterns,
+        totalThisMonth,
+        totalLastMonth,
+        averageDailySpending
+    } = analysis;
+
+    const screenWidth = Dimensions.get('window').width;
+    const chartWidth = screenWidth - 64; // Accounting for padding
+    const maxDailyAmount = Math.max(...Object.values(weeklyStats.dailyBreakdown));
+
+    const getBarWidth = (amount: number) => {
+        return (amount / maxDailyAmount) * (chartWidth - 100); // Leave space for labels
+    };
+
+    const getBarColor = (amount: number) => {
+        if (amount > averageDailySpending * 1.5) {
+            return ['#FF5252', '#FF8A80'] as [string, string];
+        } else if (amount > averageDailySpending * 1.2) {
+            return ['#FFA726', '#FFB74D'] as [string, string];
+        } else if (amount < averageDailySpending * 0.5) {
+            return ['#66BB6A', '#81C784'] as [string, string];
+        } else {
+            return ['#42A5F5', '#64B5F6'] as [string, string];
+        }
+    };
+
+    const formatAmount = (amount: number) => {
+        return amount.toLocaleString('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        });
+    };
 
     const getTrendIcon = (trend: string) => {
         switch (trend) {
-            case 'increasing': return 'trending-up';
-            case 'decreasing': return 'trending-down';
-            default: return 'remove';
+            case 'increasing':
+                return '📈';
+            case 'decreasing':
+                return '📉';
+            default:
+                return '➡️';
         }
     };
 
-    const getTrendColor = (trend: string) => {
-        switch (trend) {
-            case 'increasing': return '#FF6B6B';
-            case 'decreasing': return '#4ECDC4';
-            default: return '#95A5A6';
-        }
+    const getMonthlyComparison = () => {
+        const difference = totalThisMonth - totalLastMonth;
+        const percentChange = ((difference / totalLastMonth) * 100);
+        const isIncrease = difference > 0;
+
+        return {
+            text: `${isIncrease ? 'Up' : 'Down'} ${Math.abs(percentChange).toFixed(1)}%`,
+            color: isIncrease ? '#FF5252' : '#66BB6A',
+            icon: isIncrease ? '📈' : '📉'
+        };
     };
 
-    const getTrendMessage = (trend: string) => {
-        switch (trend) {
-            case 'increasing': return 'Spending is up - time to hop back to budget! 🐰⬆️';
-            case 'decreasing': return 'Great job! Your spending is down! 🐰📉';
-            default: return 'Steady as she goes, bunny! 🐰➡️';
-        }
-    };
-
-    const dailyData = Object.entries(weeklyStats.dailyBreakdown).map(([day, amount]) => ({
-        day: day.substring(0, 3), // Mon, Tue, etc.
-        amount,
-        percentage: weeklyStats.currentWeek > 0 ? (amount / weeklyStats.currentWeek) * 100 : 0
-    }));
-
-    const getBarHeight = (percentage: number) => {
-        return Math.max(percentage * 1.5, 5); // Minimum height of 5
-    };
+    const monthlyComparison = getMonthlyComparison();
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -86,129 +112,122 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
                 </View>
             </View>
 
-            {/* Weekly Comparison */}
-            <View style={styles.statsCard}>
-                <View style={styles.statsHeader}>
-                    <Text style={styles.cardTitle}>📊 Week Comparison</Text>
-                    <Ionicons
-                        name={getTrendIcon(weeklyStats.trend)}
-                        size={24}
-                        color={getTrendColor(weeklyStats.trend)}
-                    />
-                </View>
-
-                <View style={styles.weeklyComparison}>
-                    <View style={styles.weeklyItem}>
-                        <Text style={styles.weeklyLabel}>This Week</Text>
-                        <Text style={styles.weeklyAmount}>{weeklyStats.currentWeek.toFixed(0)} RON</Text>
+            {/* Weekly Overview Card */}
+            <View style={styles.card}>
+                <Text style={styles.cardTitle}>Weekly Overview</Text>
+                <View style={styles.weeklyOverview}>
+                    <View style={styles.overviewItem}>
+                        <Text style={styles.overviewLabel}>This Week</Text>
+                        <Text style={styles.overviewAmount}>{formatAmount(weeklyStats.currentWeek)} RON</Text>
                     </View>
-                    <View style={styles.weeklyItem}>
-                        <Text style={styles.weeklyLabel}>Last Week</Text>
-                        <Text style={[styles.weeklyAmount, { color: '#666' }]}>
-                            {weeklyStats.lastWeek.toFixed(0)} RON
+                    <View style={styles.trendIndicator}>
+                        <Text style={styles.trendIcon}>{getTrendIcon(weeklyStats.trend)}</Text>
+                        <Text style={[
+                            styles.trendText,
+                            { color: weeklyStats.trend === 'increasing' ? '#FF5252' : '#66BB6A' }
+                        ]}>
+                            {weeklyStats.trend === 'increasing' ? 'Up' : 'Down'}
                         </Text>
                     </View>
+                    <View style={styles.overviewItem}>
+                        <Text style={styles.overviewLabel}>Last Week</Text>
+                        <Text style={styles.overviewAmount}>{formatAmount(weeklyStats.lastWeek)} RON</Text>
+                    </View>
                 </View>
-
-                <Text style={styles.trendMessage}>
-                    {getTrendMessage(weeklyStats.trend)}
-                </Text>
             </View>
 
-            {/* Daily Breakdown Chart */}
-            <View style={styles.statsCard}>
-                <Text style={styles.cardTitle}>📅 Daily Breakdown</Text>
-                <View style={styles.chartContainer}>
-                    {dailyData.map((item, index) => (
-                        <View key={index} style={styles.barContainer}>
-                            <Text style={styles.barAmount}>{item.amount.toFixed(0)}</Text>
-                            <View style={styles.barWrapper}>
-                                <View
-                                    style={[
-                                        styles.bar,
-                                        {
-                                            height: getBarHeight(item.percentage),
-                                            backgroundColor: item.day === weeklyStats.topSpendingDay.day.substring(0, 3)
-                                                ? '#FF6B6B' : '#4ECDC4'
-                                        }
-                                    ]}
-                                />
+            {/* Daily Breakdown Card */}
+            <View style={styles.card}>
+                <Text style={styles.cardTitle}>Daily Breakdown</Text>
+                <Text style={styles.cardSubtitle}>Compare your daily spending with your average</Text>
+                <View style={styles.barChart}>
+                    {Object.entries(weeklyStats.dailyBreakdown).map(([day, amount]) => {
+                        const percentOfAverage = (amount / averageDailySpending) * 100;
+                        const status = percentOfAverage > 120 ? 'high' : percentOfAverage < 80 ? 'low' : 'normal';
+                        const barColor = getBarColor(amount);
+                        
+                        return (
+                            <View key={day} style={styles.barRow}>
+                                <Text style={styles.barLabel}>{day.slice(0, 3)}</Text>
+                                <View style={styles.barContainer}>
+                                    <LinearGradient
+                                        colors={barColor}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 0 }}
+                                        style={[styles.bar, { width: getBarWidth(amount) }]}
+                                    />
+                                </View>
+                                <View style={styles.barInfo}>
+                                    <Text style={styles.barAmount}>{formatAmount(amount)}</Text>
+                                    <Text style={[styles.barStatus, styles[`barStatus${status}`]]}>
+                                        {Math.round(percentOfAverage)}%
+                                    </Text>
+                                </View>
                             </View>
-                            <Text style={styles.barLabel}>{item.day}</Text>
-                        </View>
-                    ))}
+                        );
+                    })}
                 </View>
-
-                {weeklyStats.topSpendingDay.amount > 0 && (
-                    <View style={styles.insightContainer}>
-                        <Text style={styles.insightText}>
-                            🚨 Highest spending: {weeklyStats.topSpendingDay.day} ({weeklyStats.topSpendingDay.amount.toFixed(0)} RON)
-                        </Text>
+                <View style={styles.legendContainer}>
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#FF5252' }]} />
+                        <Text style={styles.legendText}>Above Average ({'>'}120%)</Text>
                     </View>
-                )}
-            </View>
-
-            {/* Top Spending Category */}
-            <View style={styles.statsCard}>
-                <Text style={styles.cardTitle}>🎯 Monthly Highlights</Text>
-
-                <View style={styles.highlightRow}>
-                    <View style={styles.highlightItem}>
-                        <Text style={styles.highlightLabel}>Total This Month</Text>
-                        <Text style={styles.highlightValue}>{totalThisMonth.toFixed(0)} RON</Text>
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#42A5F5' }]} />
+                        <Text style={styles.legendText}>Normal (80-120%)</Text>
                     </View>
-                    <View style={styles.highlightItem}>
-                        <Text style={styles.highlightLabel}>Daily Average</Text>
-                        <Text style={styles.highlightValue}>{averageDailySpending.toFixed(0)} RON</Text>
-                    </View>
-                </View>
-
-                <View style={styles.spendingTypeContainer}>
-                    <Text style={styles.spendingTypeTitle}>💰 Spending Breakdown</Text>
-                    <View style={styles.spendingTypeRow}>
-                        <View style={styles.spendingTypeItem}>
-                            <View style={[styles.spendingTypeDot, { backgroundColor: '#4ECDC4' }]} />
-                            <Text style={styles.spendingTypeLabel}>Essential</Text>
-                            <Text style={styles.spendingTypeAmount}>
-                                {spendingPatterns.essentialVsFlexible.essential.toFixed(0)} RON
-                            </Text>
-                        </View>
-                        <View style={styles.spendingTypeItem}>
-                            <View style={[styles.spendingTypeDot, { backgroundColor: '#FF6B6B' }]} />
-                            <Text style={styles.spendingTypeLabel}>Flexible</Text>
-                            <Text style={styles.spendingTypeAmount}>
-                                {spendingPatterns.essentialVsFlexible.flexible.toFixed(0)} RON
-                            </Text>
-                        </View>
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#66BB6A' }]} />
+                        <Text style={styles.legendText}>Below Average ({'<'}80%)</Text>
                     </View>
                 </View>
             </View>
-            {/* Weekend vs Weekday */}
-            <View style={styles.statsCard}>
-                <Text style={styles.cardTitle}>🗓️ Weekend vs Weekday</Text>
 
-                <View style={styles.weekendWeekdayContainer}>
-                    <View style={styles.weekendWeekdayItem}>
-                        <Text style={styles.weekendWeekdayEmoji}>💼</Text>
-                        <Text style={styles.weekendWeekdayLabel}>Weekdays</Text>
-                        <Text style={styles.weekendWeekdayAmount}>
-                            {spendingPatterns.weekdayVsWeekend.weekday.toFixed(0)} RON
-                        </Text>
+            {/* Monthly Comparison Card */}
+            <View style={styles.card}>
+                <Text style={styles.cardTitle}>Monthly Progress</Text>
+                <View style={styles.monthlyComparison}>
+                    <View style={styles.monthlyItem}>
+                        <Text style={styles.monthlyLabel}>This Month</Text>
+                        <Text style={styles.monthlyAmount}>{formatAmount(totalThisMonth)} RON</Text>
                     </View>
-                    <View style={styles.weekendWeekdayItem}>
-                        <Text style={styles.weekendWeekdayEmoji}>🎉</Text>
-                        <Text style={styles.weekendWeekdayLabel}>Weekends</Text>
-                        <Text style={styles.weekendWeekdayAmount}>
-                            {spendingPatterns.weekdayVsWeekend.weekend.toFixed(0)} RON
+                    <View style={[styles.monthlyTrend, { backgroundColor: monthlyComparison.color + '20' }]}>
+                        <Text style={styles.monthlyTrendIcon}>{monthlyComparison.icon}</Text>
+                        <Text style={[styles.monthlyTrendText, { color: monthlyComparison.color }]}>
+                            {monthlyComparison.text}
                         </Text>
                     </View>
                 </View>
+                <View style={styles.averageContainer}>
+                    <Text style={styles.averageLabel}>Daily Average:</Text>
+                    <Text style={styles.averageAmount}>{formatAmount(averageDailySpending)} RON</Text>
+                </View>
+            </View>
 
-                {spendingPatterns.weekdayVsWeekend.weekend > spendingPatterns.weekdayVsWeekend.weekday * 0.3 && (
-                    <Text style={styles.weekendInsight}>
-                        🐰 Weekend warrior detected! Your weekend spending is quite active!
-                    </Text>
-                )}
+            {/* Spending Distribution Card */}
+            <View style={styles.card}>
+                <Text style={styles.cardTitle}>Spending Distribution</Text>
+                <View style={styles.distributionRow}>
+                    <View style={styles.distributionItem}>
+                        <Text style={styles.distributionLabel}>Essential</Text>
+                        <Text style={styles.distributionAmount}>
+                            {formatAmount(spendingPatterns.essentialVsFlexible.essential)} RON
+                        </Text>
+                        <Text style={styles.distributionPercentage}>
+                            {Math.round((spendingPatterns.essentialVsFlexible.essential / totalThisMonth) * 100)}%
+                        </Text>
+                    </View>
+                    <View style={styles.distributionDivider} />
+                    <View style={styles.distributionItem}>
+                        <Text style={styles.distributionLabel}>Flexible</Text>
+                        <Text style={styles.distributionAmount}>
+                            {formatAmount(spendingPatterns.essentialVsFlexible.flexible)} RON
+                        </Text>
+                        <Text style={styles.distributionPercentage}>
+                            {Math.round((spendingPatterns.essentialVsFlexible.flexible / totalThisMonth) * 100)}%
+                        </Text>
+                    </View>
+                </View>
             </View>
         </ScrollView>
     );
@@ -218,28 +237,33 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     headerRow: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         paddingTop: 20,
         paddingBottom: 16,
-        paddingRight: 20,
+        paddingHorizontal: 16,
     },
     image: {
-        width: 200,
-        height: 200,
-        marginRight: 0,
+        width: 120,
+        height: 120,
+        marginRight: 16,
+        alignSelf: 'center',
     },
-    headerText: { flex: 1 },
+    headerText: { 
+        flex: 1,
+        paddingTop: 8,
+    },
     headerTitle: {
         fontSize: 22,
         fontWeight: 'bold',
         color: '#90483c',
         fontFamily: 'Fredoka',
-        marginBottom: 4,
+        marginBottom: 8,
     },
     headerSubtitle: {
         fontSize: 14,
         color: '#91483C',
         fontFamily: 'Fredoka',
+        marginTop: 4,
     },
     loadingContainer: {
         alignItems: 'center',
@@ -252,191 +276,222 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontFamily: 'Fredoka',
     },
-    statsCard: {
-        backgroundColor: '#FFF0E0',
-        borderRadius: 20,
-        padding: 20,
-        marginHorizontal: 16,
+    card: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
         marginBottom: 16,
-        borderWidth: 2,
-        borderColor: '#FFD4A8',
-        elevation: 4,
+        elevation: 2,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
-    },
-    statsHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
     },
     cardTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#91483C',
         fontFamily: 'Fredoka',
-    },
-    weeklyComparison: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
         marginBottom: 16,
     },
-    weeklyItem: {
+    cardSubtitle: {
+        fontSize: 14,
+        color: '#666666',
+        fontFamily: 'Fredoka',
+        marginBottom: 16,
+    },
+    weeklyOverview: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
     },
-    weeklyLabel: {
+    overviewItem: {
+        alignItems: 'center',
+    },
+    overviewLabel: {
         fontSize: 14,
-        color: '#666',
+        color: '#666666',
         fontFamily: 'Fredoka',
         marginBottom: 4,
     },
-    weeklyAmount: {
+    overviewAmount: {
         fontSize: 20,
         fontWeight: 'bold',
         color: '#91483C',
         fontFamily: 'Fredoka',
     },
-    trendMessage: {
-        fontSize: 14,
-        color: '#666',
-        textAlign: 'center',
-        fontStyle: 'italic',
-        fontFamily: 'Fredoka',
-    },
-    chartContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'flex-end',
-        height: 120,
-        marginVertical: 16,
-    },
-    barContainer: {
+    trendIndicator: {
         alignItems: 'center',
-        flex: 1,
     },
-    barAmount: {
-        fontSize: 10,
-        color: '#666',
+    trendIcon: {
+        fontSize: 24,
         marginBottom: 4,
-        fontFamily: 'Fredoka',
     },
-    barWrapper: {
-        height: 80,
-        justifyContent: 'flex-end',
-        width: 20,
-    },
-    bar: {
-        width: 20,
-        borderRadius: 10,
-        minHeight: 5,
-    },
-    barLabel: {
-        fontSize: 12,
-        color: '#91483C',
-        marginTop: 4,
+    trendText: {
+        fontSize: 14,
         fontWeight: 'bold',
         fontFamily: 'Fredoka',
     },
-    insightContainer: {
-        backgroundColor: '#FFE6E6',
-        padding: 12,
-        borderRadius: 12,
-        marginTop: 16,
+    barChart: {
+        marginTop: 8,
+        paddingRight: 16,
     },
-    insightText: {
-        fontSize: 12,
-        color: '#D32F2F',
-        textAlign: 'center',
-        fontFamily: 'Fredoka',
-    },
-    highlightRow: {
+    barRow: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
-        marginBottom: 20,
-    },
-    highlightItem: {
         alignItems: 'center',
+        marginBottom: 12,
+        height: 40,
     },
-    highlightLabel: {
+    barLabel: {
+        width: 50,
+        fontSize: 14,
+        color: '#666666',
+        fontFamily: 'Fredoka',
+        marginRight: 8,
+    },
+    barContainer: {
+        flex: 1,
+        height: 12,
+        backgroundColor: '#F5F5F5',
+        borderRadius: 6,
+        overflow: 'hidden',
+        marginRight: 16,
+    },
+    bar: {
+        height: '100%',
+        borderRadius: 6,
+    },
+    barInfo: {
+        width: 80,
+        alignItems: 'flex-end',
+    },
+    barAmount: {
+        fontSize: 14,
+        color: '#91483C',
+        fontFamily: 'Fredoka',
+        fontWeight: 'bold',
+    },
+    barStatus: {
         fontSize: 12,
-        color: '#666',
+        fontFamily: 'Fredoka',
+        marginTop: 2,
+    },
+    barStatushigh: {
+        color: '#FF5252',
+    },
+    barStatuslow: {
+        color: '#66BB6A',
+    },
+    barStatusnormal: {
+        color: '#42A5F5',
+    },
+    monthlyComparison: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    monthlyItem: {
+        alignItems: 'flex-start',
+    },
+    monthlyLabel: {
+        fontSize: 14,
+        color: '#666666',
         fontFamily: 'Fredoka',
         marginBottom: 4,
     },
-    highlightValue: {
+    monthlyAmount: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#91483C',
+        fontFamily: 'Fredoka',
+    },
+    monthlyTrend: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 8,
+        borderRadius: 12,
+    },
+    monthlyTrendIcon: {
+        fontSize: 20,
+        marginRight: 4,
+    },
+    monthlyTrendText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        fontFamily: 'Fredoka',
+    },
+    averageContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F5F5F5',
+        padding: 12,
+        borderRadius: 8,
+    },
+    averageLabel: {
+        fontSize: 14,
+        color: '#666666',
+        fontFamily: 'Fredoka',
+    },
+    averageAmount: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#91483C',
+        fontFamily: 'Fredoka',
+    },
+    distributionRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    distributionItem: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    distributionLabel: {
+        fontSize: 14,
+        color: '#666666',
+        fontFamily: 'Fredoka',
+        marginBottom: 4,
+    },
+    distributionAmount: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#91483C',
         fontFamily: 'Fredoka',
+        marginBottom: 4,
     },
-    spendingTypeContainer: {
-        marginTop: 16,
-    },
-    spendingTypeTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#91483C',
-        marginBottom: 12,
+    distributionPercentage: {
+        fontSize: 14,
+        color: '#666666',
         fontFamily: 'Fredoka',
     },
-    spendingTypeRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
+    distributionDivider: {
+        width: 1,
+        height: 40,
+        backgroundColor: '#E0E0E0',
+        marginHorizontal: 16,
     },
-    spendingTypeItem: {
+    legendContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 16,
+    },
+    legendItem: {
         flexDirection: 'row',
         alignItems: 'center',
     },
-    spendingTypeDot: {
+    legendDot: {
         width: 12,
         height: 12,
         borderRadius: 6,
         marginRight: 8,
     },
-    spendingTypeLabel: {
+    legendText: {
         fontSize: 14,
-        color: '#666',
-        marginRight: 8,
-        fontFamily: 'Fredoka',
-    },
-    spendingTypeAmount: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#91483C',
-        fontFamily: 'Fredoka',
-    },
-    weekendWeekdayContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        marginBottom: 16,
-    },
-    weekendWeekdayItem: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    weekendWeekdayEmoji: {
-        fontSize: 32,
-        marginBottom: 8,
-    },
-    weekendWeekdayLabel: {
-        fontSize: 14,
-        color: '#666',
-        fontFamily: 'Fredoka',
-        marginBottom: 4,
-    },
-    weekendWeekdayAmount: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#91483C',
-        fontFamily: 'Fredoka',
-    },
-    weekendInsight: {
-        fontSize: 12,
-        color: '#666',
-        textAlign: 'center',
-        fontStyle: 'italic',
+        color: '#666666',
         fontFamily: 'Fredoka',
     },
 });

@@ -9,13 +9,16 @@ export interface BudgetData {
 
 export interface Expense {
     id: string;
-    date: string;
-    amount: string;
+    amount: number;
     category: string;
     subcategory: string;
+    date: string;
     note?: string;
-    source?: string;
     userId: string;
+    timestamp?: Date;
+    currency?: string;
+    budgetId?: string;
+    source?: string;
 }
 
 export function filterExpensesByPeriod(

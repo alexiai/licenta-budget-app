@@ -1,3 +1,4 @@
+import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, Switch, Alert, Image, ScrollView, ImageBackground } from 'react-native';
 import { useEffect, useState } from 'react';
 import { auth, db } from '../../../lib/firebase';
@@ -7,6 +8,7 @@ import { useRouter } from 'expo-router';
 import styles from '../../../styles/profile';
 import bg from '@assets/bg/profilebackrground.png';
 import calendarGood from '@assets/icons/calendarGood.png';
+import aiRewards from '@assets/decor/aiRewards.png';
 
 interface Badge {
     id: string;
@@ -23,15 +25,18 @@ interface UserProgress {
     totalPoints: number;
     badges: Badge[];
     questsCompleted: number;
+    currentStreak: number;
+    lastCompletedDate?: string;
+    level: number;
+    xp: number;
 }
 
 export default function MyProfileScreen() {
-    const user = auth.currentUser;
     const router = useRouter();
-
+    const [currentUser, setCurrentUser] = useState(auth.currentUser);
     const [name, setName] = useState('');
     const [surname, setSurname] = useState('');
-    const [email, setEmail] = useState(user?.email || '');
+    const [email, setEmail] = useState(currentUser?.email || '');
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [appNotificationsEnabled, setAppNotificationsEnabled] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
@@ -56,46 +61,65 @@ export default function MyProfileScreen() {
     }
 
     useEffect(() => {
-        const loadUser = async () => {
-            if (!user) return;
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            if (userDoc.exists()) {
-                const data = userDoc.data() as UserData;
-                setName(data.name || '');
-                setSurname(data.surname || '');
-                setEmail(data.email || user?.email || '');
-                setNotificationsEnabled(data.notificationsEnabled ?? true);
-                setAppNotificationsEnabled(data.appNotificationsEnabled ?? true);
-            }
+        const user = auth.currentUser;
+        if (!user) {
+            router.replace('/welcome');
+            return;
+        }
+        setCurrentUser(user);
 
-            // Load user progress and badges
-            const progressDoc = await getDoc(doc(db, 'userProgress', user.uid));
-            if (progressDoc.exists()) {
-                const progressData = progressDoc.data();
-                setUserProgress({
-                    completedQuests: progressData.completedQuests || [],
-                    totalPoints: progressData.totalPoints || 0,
-                    badges: progressData.badges || [],
-                    questsCompleted: progressData.questsCompleted || 0
-                });
-            } else {
-                // Initialize empty progress if doesn't exist
-                setUserProgress({
-                    completedQuests: [],
-                    totalPoints: 0,
-                    badges: [],
-                    questsCompleted: 0
-                });
+        const loadUser = async () => {
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                    const data = userDoc.data() as UserData;
+                    setName(data.name || '');
+                    setSurname(data.surname || '');
+                    setEmail(data.email || user.email || '');
+                    setNotificationsEnabled(data.notificationsEnabled ?? true);
+                    setAppNotificationsEnabled(data.appNotificationsEnabled ?? true);
+                }
+
+                // Load user progress and badges
+                const progressDoc = await getDoc(doc(db, 'userProgress', user.uid));
+                if (progressDoc.exists()) {
+                    const progressData = progressDoc.data();
+                    setUserProgress({
+                        completedQuests: progressData.completedQuests || [],
+                        totalPoints: progressData.totalPoints || 0,
+                        badges: progressData.badges || [],
+                        questsCompleted: progressData.questsCompleted || 0,
+                        currentStreak: progressData.currentStreak || 0,
+                        lastCompletedDate: progressData.lastCompletedDate,
+                        level: progressData.level || 1,
+                        xp: progressData.xp || 0
+                    });
+                } else {
+                    // Initialize empty progress if doesn't exist
+                    setUserProgress({
+                        completedQuests: [],
+                        totalPoints: 0,
+                        badges: [],
+                        questsCompleted: 0,
+                        currentStreak: 0,
+                        level: 1,
+                        xp: 0
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+                Alert.alert('Error', 'Failed to load user data. Please try again.');
             }
         };
+
         loadUser();
-    }, [user]);
+    }, [router]);
 
     const handleSave = async () => {
-        if (!user) return;
+        if (!currentUser) return;
 
         try {
-            await updateDoc(doc(db, 'users', user.uid), {
+            await updateDoc(doc(db, 'users', currentUser.uid), {
                 name,
                 surname,
                 email,
@@ -114,8 +138,9 @@ export default function MyProfileScreen() {
     };
 
     const handleDisconnectBank = async () => {
+        if (!currentUser) return;
         try {
-            await deleteDoc(doc(db, 'bankConnections', user.uid));
+            await deleteDoc(doc(db, 'bankConnections', currentUser.uid));
             Alert.alert('Disconnected', 'Bank account disconnected successfully.');
         } catch (err) {
             Alert.alert('Error', 'Failed to disconnect bank account.');
@@ -123,7 +148,7 @@ export default function MyProfileScreen() {
     };
 
     const handlePasswordChange = async () => {
-        if (!user || !user.email) return;
+        if (!currentUser || !currentUser.email) return;
 
         if (newPassword !== confirmPassword) {
             Alert.alert('Error', 'New passwords do not match');
@@ -133,12 +158,12 @@ export default function MyProfileScreen() {
         try {
             // Reauthenticate user
             const credential = EmailAuthProvider.credential(
-                user.email,
+                currentUser.email,
                 currentPassword
             );
 
-            await reauthenticateWithCredential(user, credential);
-            await updatePassword(user, newPassword);
+            await reauthenticateWithCredential(currentUser, credential);
+            await updatePassword(currentUser, newPassword);
 
             Alert.alert('Success', 'Password changed successfully');
             setShowPasswordChange(false);
@@ -151,14 +176,14 @@ export default function MyProfileScreen() {
     };
 
     const handleDeleteAccount = async () => {
-        if (!user) return;
+        if (!currentUser) return;
 
         try {
             // First delete user data from Firestore
-            await deleteDoc(doc(db, 'users', user.uid));
+            await deleteDoc(doc(db, 'users', currentUser.uid));
 
             // Then delete the user account
-            await deleteUser(user);
+            await deleteUser(currentUser);
 
             Alert.alert('Account deleted', 'Your account has been successfully deleted');
             router.replace('/welcome');
@@ -187,19 +212,21 @@ export default function MyProfileScreen() {
                 {/* Badge Section */}
                 {userProgress && (
                     <View style={styles.badgeSection}>
-                        <Text style={styles.badgeTitle}>🏆 Your Achievements</Text>
-                        <View style={styles.badgeStats}>
-                            <View style={styles.badgeStat}>
-                                <Text style={styles.badgeStatNumber}>{userProgress.totalPoints}</Text>
-                                <Text style={styles.badgeStatLabel}>🥕 CarrotCoins</Text>
-                            </View>
-                            <View style={styles.badgeStat}>
-                                <Text style={styles.badgeStatNumber}>{userProgress.questsCompleted}</Text>
-                                <Text style={styles.badgeStatLabel}>Quests Completed</Text>
-                            </View>
-                            <View style={styles.badgeStat}>
-                                <Text style={styles.badgeStatNumber}>{earnedBadges.length}</Text>
-                                <Text style={styles.badgeStatLabel}>Badges Earned</Text>
+                        <View style={styles.achievementHeader}>
+                            <Image source={aiRewards} style={styles.achievementIcon} />
+                            <View style={styles.achievementStats}>
+                                <View style={styles.achievementRow}>
+                                    <Text style={styles.achievementValue}>{userProgress.totalPoints}</Text>
+                                    <Text style={styles.achievementLabel}>CarrotCoins</Text>
+                                </View>
+                                <View style={styles.achievementRow}>
+                                    <Text style={styles.achievementValue}>{userProgress.questsCompleted}</Text>
+                                    <Text style={styles.achievementLabel}>Quests</Text>
+                                </View>
+                                <View style={styles.achievementRow}>
+                                    <Text style={styles.achievementValue}>{earnedBadges.length}</Text>
+                                    <Text style={styles.achievementLabel}>Badges</Text>
+                                </View>
                             </View>
                         </View>
 

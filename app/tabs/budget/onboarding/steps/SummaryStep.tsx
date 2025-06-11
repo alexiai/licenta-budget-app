@@ -4,8 +4,35 @@ import { auth, db } from '@lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import bg from '@assets/bg/basicinfobackground.png';
 
-export default function SummaryStep({ onFinish, data }) {
-    const totalIncome = data.incomes?.reduce((sum, i) => sum + parseFloat(i.amount || '0'), 0) || 0;
+interface Income {
+    type: string;
+    amount: string;
+}
+
+interface Subcategory {
+    name: string;
+    amount: string;
+}
+
+interface Category {
+    name: string;
+    subcategories: Subcategory[];
+}
+
+interface SummaryStepProps {
+    onFinish: () => void;
+    onBack: () => void;
+    data: {
+        name: string;
+        period: string;
+        startDay: string;
+        incomes: Income[];
+        categories: Category[];
+    };
+}
+
+export default function SummaryStep({ onFinish, onBack, data }: SummaryStepProps) {
+    const totalIncome = data.incomes?.reduce((sum: number, i: Income) => sum + parseFloat(i.amount || '0'), 0) || 0;
 
     const handleSaveBudget = async () => {
         try {
@@ -15,14 +42,14 @@ export default function SummaryStep({ onFinish, data }) {
                 return;
             }
 
-            const cleanedIncomes = (data.incomes || []).map((i) => ({
+            const cleanedIncomes = (data.incomes || []).map((i: Income) => ({
                 type: i.type,
                 amount: String(i.amount ?? '0').trim(),
             }));
 
-            const cleanedCategories = (data.categories || []).map((cat) => ({
+            const cleanedCategories = (data.categories || []).map((cat: Category) => ({
                 name: cat.name,
-                subcategories: (cat.subcategories || []).map((sub) => ({
+                subcategories: (cat.subcategories || []).map((sub: Subcategory) => ({
                     name: sub.name,
                     amount: String(sub.amount ?? '0').trim(),
                 })),
@@ -66,19 +93,19 @@ export default function SummaryStep({ onFinish, data }) {
                     <Text style={styles.highlightText}>Total Income: {totalIncome} RON</Text>
 
                     <Text style={styles.sectionTitle}>Income:</Text>
-                    {data.incomes.map((inc, i) => (
+                    {data.incomes.map((inc: Income, i: number) => (
                         <Text key={i} style={styles.itemText}>
                             • {inc.type}: {inc.amount} RON
                         </Text>
                     ))}
 
                     <Text style={styles.sectionTitle}>Expenses:</Text>
-                    {data.categories.map((cat, i) => (
+                    {data.categories.map((cat: Category, i: number) => (
                         <View key={i}>
                             <Text style={styles.categoryTitle}>• {cat.name}</Text>
                             {cat.subcategories
-                                .filter((sub) => sub.amount && parseFloat(sub.amount) > 0)
-                                .map((sub, j) => (
+                                .filter((sub: Subcategory) => sub.amount && parseFloat(sub.amount) > 0)
+                                .map((sub: Subcategory, j: number) => (
                                     <Text key={j} style={styles.subItemText}>
                                         - {sub.name}: {sub.amount} RON
                                     </Text>
@@ -86,9 +113,15 @@ export default function SummaryStep({ onFinish, data }) {
                         </View>
                     ))}
 
-                    <TouchableOpacity onPress={handleSaveBudget} style={styles.button}>
-                        <Text style={styles.buttonText}>Save Budget</Text>
-                    </TouchableOpacity>
+                    <View style={styles.buttonContainer}>
+                        <TouchableOpacity onPress={onBack} style={[styles.button, styles.backButton]}>
+                            <Text style={[styles.buttonText, styles.backButtonText]}>Back</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity onPress={handleSaveBudget} style={styles.button}>
+                            <Text style={styles.buttonText}>Save Budget</Text>
+                        </TouchableOpacity>
+                    </View>
                 </ScrollView>
             </KeyboardAvoidingView>
         </ImageBackground>

@@ -28,6 +28,9 @@ export default StyleSheet.create({
         fontWeight: 'bold',
         color: '#d2c1ad',
         fontSize: 17,
-        letterSpacing: -0.7
+        letterSpacing: -0.7,
+    },
+    switchTextActive: {
+        color: '#fff',
     },
 });

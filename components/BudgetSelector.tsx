@@ -10,21 +10,24 @@ import {
     Dimensions
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
+import { useRouter } from 'expo-router';
 
 type BudgetSelectorProps = {
     onBudgetChange?: (id: string | null) => void;
     onNewBudget?: () => void;
     selectedBudget?: string | null;
+    onCancel?: () => void;
 };
 
-export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBudget }: BudgetSelectorProps) {
+export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBudget, onCancel }: BudgetSelectorProps) {
     const [modalVisible, setModalVisible] = useState(false);
     const [budgets, setBudgets] = useState<any[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(selectedBudget || null);
-    const selectedName = budgets.find((b) => b.id === selectedId)?.name ?? 'Switch Budget';
+    const selectedName = budgets.find((b) => b.id === selectedId)?.name ?? 'Select Budget';
+    const router = useRouter();
 
     useEffect(() => {
         const loadSelected = async () => {
@@ -56,11 +59,23 @@ export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBu
         onBudgetChange?.(id);
     };
 
+    const handleNewBudget = () => {
+        setModalVisible(false);
+        onNewBudget?.();
+    };
+
+    const handleCancel = () => {
+        setModalVisible(false);
+        onCancel?.();
+        router.back();
+    };
+
     return (
         <>
             <TouchableOpacity style={styles.bar} onPress={() => setModalVisible(true)}>
-                <Text style={styles.barText}>❤{selectedName}</Text>
-                <Feather name="chevron-down" size={20} color="#333" style={styles.arrowIcon} />
+                <Ionicons name="wallet-outline" size={24} color="#91483C" style={styles.walletIcon} />
+                <Text style={styles.barText}>{selectedName}</Text>
+                <Ionicons name="chevron-down" size={20} color="#91483C" style={styles.arrowIcon} />
             </TouchableOpacity>
 
             <Modal
@@ -74,7 +89,12 @@ export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBu
                 </TouchableWithoutFeedback>
 
                 <View style={styles.modalView}>
-                    <Text style={styles.title}>Select a Budget</Text>
+                    <View style={styles.header}>
+                        <Text style={styles.title}>Select a Budget</Text>
+                        <TouchableOpacity onPress={() => setModalVisible(false)}>
+                            <Ionicons name="close" size={24} color="#91483C" />
+                        </TouchableOpacity>
+                    </View>
 
                     <FlatList
                         data={budgets}
@@ -86,20 +106,33 @@ export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBu
                                 style={[styles.item, selectedId === item.id && styles.selectedItem]}
                                 onPress={() => handleSelect(item.id)}
                             >
-                                <Text style={styles.itemText}>{item.name}</Text>
+                                <Text style={[styles.itemText, selectedId === item.id && styles.selectedItemText]}>
+                                    {item.name}
+                                </Text>
+                                {selectedId === item.id && (
+                                    <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                                )}
                             </TouchableOpacity>
                         )}
                     />
 
-                    <TouchableOpacity
-                        style={styles.addButton}
-                        onPress={() => {
-                            setModalVisible(false);
-                            onNewBudget?.();
-                        }}
-                    >
-                        <Text style={styles.addButtonText}>➕ Add New Budget</Text>
-                    </TouchableOpacity>
+                    <View style={styles.buttonContainer}>
+                        <TouchableOpacity
+                            style={styles.addButton}
+                            onPress={handleNewBudget}
+                        >
+                            <Ionicons name="add-circle-outline" size={24} color="#91483C" />
+                            <Text style={styles.addButtonText}>New Budget</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.cancelButton}
+                            onPress={handleCancel}
+                        >
+                            <Ionicons name="arrow-back-circle-outline" size={24} color="#666" />
+                            <Text style={styles.cancelButtonText}>Go Back</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </Modal>
         </>
@@ -110,20 +143,25 @@ const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
     bar: {
-        width: '87%',
-        backgroundColor: '#dfe6e9',
-        padding: 10,
-        borderRadius: 12,
+        width: '90%',
+        backgroundColor: '#fff0e8',
+        padding: 12,
+        borderRadius: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 16,
-        marginLeft: 19,
+        alignSelf: 'center',
+        borderWidth: 1,
+        borderColor: '#91483C',
+    },
+    walletIcon: {
+        marginRight: 8,
     },
     barText: {
-        fontWeight: 'bold',
+        fontWeight: '600',
         fontSize: 16,
-        color: '#000',
+        color: '#91483C',
     },
     arrowIcon: {
         position: 'absolute',
@@ -131,46 +169,91 @@ const styles = StyleSheet.create({
     },
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.3)',
+        backgroundColor: 'rgba(0,0,0,0.5)',
     },
     modalView: {
         position: 'absolute',
         bottom: 0,
         width: '100%',
-        maxHeight: height * 0.5,
+        maxHeight: height * 0.7,
         backgroundColor: 'white',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
         padding: 20,
     },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+    },
     title: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
-        marginBottom: 10,
+        color: '#91483C',
     },
     item: {
-        padding: 12,
-        backgroundColor: '#f1f2f6',
-        borderRadius: 10,
+        padding: 16,
+        backgroundColor: '#fff0e8',
+        borderRadius: 12,
         marginBottom: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderWidth: 1,
+        borderColor: '#91483C',
     },
     selectedItem: {
-        backgroundColor: '#55efc4',
+        backgroundColor: '#91483C',
     },
     itemText: {
         fontSize: 16,
+        color: '#91483C',
+        fontWeight: '500',
+    },
+    selectedItemText: {
+        color: '#fff',
+    },
+    buttonContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 10,
     },
     addButton: {
-        backgroundColor: '#dfe6e9',
+        flex: 1,
+        backgroundColor: '#fff0e8',
         padding: 12,
-        borderRadius: 10,
+        borderRadius: 12,
         alignItems: 'center',
-        marginTop: 10,
+        marginRight: 8,
+        flexDirection: 'row',
+        justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#b2bec3',
+        borderColor: '#91483C',
     },
     addButtonText: {
-        color: '#636e72',
-        fontWeight: 'bold',
+        color: '#91483C',
+        fontWeight: '600',
+        marginLeft: 8,
+    },
+    cancelButton: {
+        flex: 1,
+        backgroundColor: '#f5f5f5',
+        padding: 12,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginLeft: 8,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#ddd',
+    },
+    cancelButtonText: {
+        color: '#666',
+        fontWeight: '600',
+        marginLeft: 8,
     },
 });

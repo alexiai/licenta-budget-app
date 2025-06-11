@@ -65,8 +65,14 @@ export default StyleSheet.create({
     marginBottom: 2,
     fontFamily: 'Fredoka',
   },
-  button: {
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginTop: 40,
+    gap: 16,
+  },
+  button: {
+    flex: 1,
     backgroundColor: '#FFA94D',
     padding: 16,
     borderRadius: 22,
@@ -76,10 +82,16 @@ export default StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowRadius: 5,
   },
+  backButton: {
+    backgroundColor: '#FFE49D',
+  },
   buttonText: {
     fontSize: 20,
     fontWeight: '800',
     color: '#FFF',
     fontFamily: 'Fredoka',
+  },
+  backButtonText: {
+    color: '#6B3E26',
   },
 });

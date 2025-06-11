@@ -1,24 +1,36 @@
-
 // overview/list/index.tsx - with budget period filtering
 import { View, Text, FlatList, TouchableOpacity, ImageBackground, Image } from 'react-native';
 import { useEffect, useState } from 'react';
 import { db, auth } from '@lib/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import OverviewHeader from '@components/OverviewHeader';
 import bg from '@assets/bg/background3.png';
 import bunnyIcon from '@assets/icons/bunnyhead.png';
 import categories from '@lib/categories';
 import { filterExpensesByPeriod, getPeriodTitle } from '@lib/utils/expenseFilters';
 import styles from '@styles/overviewList';
+import BudgetSelector from '@components/BudgetSelector';
+
+interface Expense {
+    id: string;
+    userId: string;
+    amount: number;
+    category: string;
+    subcategory: string;
+    note?: string;
+    date: string;
+    source?: string;
+}
 
 export default function OverviewListScreen() {
-    const [expensesByDate, setExpensesByDate] = useState<any>({});
+    const [expensesByDate, setExpensesByDate] = useState<Record<string, Expense[]>>({});
     const [totalCarrotCoins, setTotalCarrotCoins] = useState(0);
-    const [allExpenses, setAllExpenses] = useState<any[]>([]);
+    const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
     const [selectedBudget, setSelectedBudget] = useState<any>(null);
     const [periodOffset, setPeriodOffset] = useState(0);
+    const [isEditing, setIsEditing] = useState(false);
     const router = useRouter();
 
     const fetchExpenses = async () => {
@@ -31,7 +43,7 @@ export default function OverviewListScreen() {
             orderBy('date', 'desc')
         );
         const snapshot = await getDocs(q);
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Expense[];
         setAllExpenses(data);
     };
 
@@ -59,7 +71,7 @@ export default function OverviewListScreen() {
             filteredExpenses = filterExpensesByPeriod(allExpenses, selectedBudget, periodOffset);
         }
 
-        const grouped: any = {};
+        const grouped: Record<string, Expense[]> = {};
         let total = 0;
 
         filteredExpenses.forEach(exp => {
@@ -68,7 +80,7 @@ export default function OverviewListScreen() {
             });
             if (!grouped[date]) grouped[date] = [];
             grouped[date].push(exp);
-            total += parseFloat(exp.amount || '0');
+            total += parseFloat(exp.amount?.toString() || '0');
         });
 
         setExpensesByDate(grouped);
@@ -101,13 +113,23 @@ export default function OverviewListScreen() {
             acc[sub.toLowerCase()] = cat.icon;
         });
         return acc;
-    }, {});
+    }, {} as Record<string, any>);
 
     const periodTitle = selectedBudget ? getPeriodTitle(selectedBudget, periodOffset) : 'All Time';
 
     return (
         <ImageBackground source={bg} resizeMode="cover" style={styles.container}>
-            <OverviewHeader onBudgetChange={handleBudgetChange} />
+            <OverviewHeader />
+            <View style={styles.fixedHeader}>
+                <View style={styles.topRow}>
+                    <View style={styles.budgetSelectorWrapper}>
+                        <BudgetSelector onBudgetChange={handleBudgetChange} selectedBudget={selectedBudget} />
+                    </View>
+                    <TouchableOpacity onPress={() => setIsEditing((prev) => !prev)} style={styles.editButton}>
+                        <Feather name={isEditing ? 'check' : 'edit'} size={22} color="#91483c" />
+                    </TouchableOpacity>
+                </View>
+            </View>
 
             <View style={styles.periodNavigation}>
                 <TouchableOpacity
@@ -140,19 +162,20 @@ export default function OverviewListScreen() {
                 renderItem={({ item: [date, expenses] }) => (
                     <View style={styles.dateGroup}>
                         <Text style={styles.dateTitle}>{date}</Text>
-                        {expenses.map((exp: any) => {
+                        {expenses.map((exp: Expense) => {
                             const icon = categoryIcons[exp.subcategory?.toLowerCase()] || require('@assets/icons/default.png');
                             return (
                                 <View key={exp.id} style={styles.expenseBox}>
-                                    <View style={styles.expenseLeft}>
+                                    <TouchableOpacity 
+                                        style={[styles.expenseLeft, isEditing && styles.editableExpense]} 
+                                        onPress={() => isEditing && router.push({
+                                            pathname: '/tabs/expenses/edit',
+                                            params: { expenseId: exp.id }
+                                        })}
+                                    >
                                         <Image source={icon} style={styles.icon} />
                                         <View>
-                                            <Text
-                                                style={[
-                                                    styles.subcategory,
-                                                    exp.subcategory?.length > 10 && styles.subcategoryMultiline,
-                                                ]}
-                                            >
+                                            <Text style={[styles.subcategory, exp.subcategory?.length > 10 && styles.subcategoryMultiline]}>
                                                 {exp.subcategory}
                                             </Text>
                                             {exp.source === 'bank' && (
@@ -162,14 +185,11 @@ export default function OverviewListScreen() {
                                                 <Text style={styles.noteText}>{exp.note}</Text>
                                             )}
                                         </View>
-                                    </View>
+                                    </TouchableOpacity>
 
                                     <View style={styles.amountBlock}>
                                         <View style={styles.amountRow}>
-                                            <Image
-                                                source={require('@assets/icons/carrotcoinlist.png')}
-                                                style={styles.carrotImage}
-                                            />
+                                            <Image source={require('@assets/icons/carrotcoinlist.png')} style={styles.carrotImage} />
                                             <Text style={styles.amountText}>{exp.amount}</Text>
                                         </View>
                                         <Text style={styles.carrotCoinText}>CarrotCoins</Text>

@@ -4,11 +4,18 @@ import {View, StyleSheet, ScrollView, TouchableOpacity, Text, ActivityIndicator,
 import { Ionicons } from '@expo/vector-icons';
 import SmartAdviceSection from './components/SmartAdviceSection';
 import ChatInterface from './components/ChatInterface';
-import { auth } from '../../../lib/firebase';
+import { auth, db } from '../../../lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import bg from '@assets/bg/AIback.png';
 import carrotIcon from '@assets/decor/carrot-icon.png';
 import bunnyHead from '@assets/icons/bunnyhead.png';
 import calendarIcon from '@assets/icons/calendarMedium.png'; // imaginea în loc de emoji
+import { useRouter } from 'expo-router';
+import SmartTipsCard from './components/SmartTipsCard';
+import { SpendingAnalysis, ExpenseData } from './components/SmartAdviceSection';
+import UnusedCategoriesCard from './components/UnusedCategoriesCard';
+import WeeklyStatsCard from './components/WeeklyStatsCard';
+import MiniQuestsCard from './components/MiniQuestsCard';
 
 type TabType = 'tips' | 'categories' | 'stats' | 'quests';
 
@@ -16,12 +23,89 @@ export default function AiScreen(): JSX.Element {
     const [showChat, setShowChat] = useState(false);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('tips');
+    const [analysis, setAnalysis] = useState<SpendingAnalysis | null>(null);
+    const [expenses, setExpenses] = useState<ExpenseData[]>([]);
+    const router = useRouter();
 
     useEffect(() => {
-        // Initialize the screen
-        const timer = setTimeout(() => setLoading(false), 1000);
-        return () => clearTimeout(timer);
+        const loadData = async () => {
+            try {
+                if (!auth.currentUser) return;
+
+                // Fetch expenses
+                const expensesRef = collection(db, 'expenses');
+                const q = query(expensesRef, where('userId', '==', auth.currentUser.uid));
+                const querySnapshot = await getDocs(q);
+                const expensesData = querySnapshot.docs.map(doc => ({
+                    ...doc.data(),
+                    id: doc.id
+                })) as ExpenseData[];
+                setExpenses(expensesData);
+
+                // TODO: Generate analysis from expenses
+                // For now, we'll use dummy data
+                setAnalysis({
+                    totalThisMonth: 1000,
+                    totalLastMonth: 900,
+                    averageDailySpending: 33.33,
+                    topCategories: [],
+                    weeklyStats: {
+                        currentWeek: 200,
+                        lastWeek: 180,
+                        trend: 'increasing',
+                        topSpendingDay: { day: 'Friday', amount: 50 },
+                        dailyBreakdown: {
+                            Monday: 30,
+                            Tuesday: 25,
+                            Wednesday: 35,
+                            Thursday: 40,
+                            Friday: 50,
+                            Saturday: 45,
+                            Sunday: 35
+                        }
+                    },
+                    spendingPatterns: {
+                        essentialVsFlexible: {
+                            essential: 600,
+                            flexible: 400
+                        },
+                        weekdayVsWeekend: {
+                            weekday: 150,
+                            weekend: 100
+                        },
+                        todayTotal: 30,
+                        recentSpikes: []
+                    },
+                    categoryBreakdown: {},
+                    subcategoryBreakdown: {},
+                    unusedCategories: [],
+                    seasonalContext: {
+                        isHolidaySeason: false,
+                        month: new Date().toLocaleString('default', { month: 'long' })
+                    }
+                });
+
+                setLoading(false);
+            } catch (error) {
+                console.error('Error loading data:', error);
+                setLoading(false);
+            }
+        };
+
+        loadData();
     }, []);
+
+    const handleUpdateBudget = (category?: string) => {
+        // Navigate to budget settings with category context
+        router.push({
+            pathname: '/(tabs)/settings',
+            params: { section: 'budget', category }
+        } as any);
+    };
+
+    const handleOpenChat = () => {
+        router.push('/tabs/ai/chatbox');
+    };
 
     if (!auth.currentUser) {
         return (
@@ -72,6 +156,39 @@ export default function AiScreen(): JSX.Element {
         { id: 'quests' as TabType, label: 'Quests' },
     ];
 
+    const renderContent = () => {
+        switch (activeTab) {
+            case 'tips':
+                return (
+                    <SmartTipsCard 
+                        analysis={analysis} 
+                        onUpdateBudget={handleUpdateBudget}
+                        onOpenChat={handleOpenChat}
+                    />
+                );
+            case 'categories':
+                return (
+                    <UnusedCategoriesCard 
+                        analysis={analysis}
+                    />
+                );
+            case 'stats':
+                return (
+                    <WeeklyStatsCard 
+                        analysis={analysis}
+                    />
+                );
+            case 'quests':
+                return (
+                    <MiniQuestsCard 
+                        analysis={analysis}
+                        expenses={expenses}
+                    />
+                );
+            default:
+                return null;
+        }
+    };
 
     return (
         <ImageBackground source={bg} style={styles.container} resizeMode="cover">
@@ -116,7 +233,7 @@ export default function AiScreen(): JSX.Element {
                 contentContainerStyle={styles.contentContainer}
             >
                 <View style={styles.contentCard}>
-                    <SmartAdviceSection activeTab={activeTab} />
+                    {renderContent()}
                 </View>
 
                 {/* Bunny Motivation Card */}
@@ -286,29 +403,26 @@ const styles = StyleSheet.create({
         fontFamily: 'Fredoka',
     },
     chatButton: {
-        position: 'absolute',
-        bottom: 30,
-        right: 20,
-        backgroundColor: '#91483C',
-        borderRadius: 25,
+        backgroundColor: '#F97850',
+        borderRadius: 26,
         paddingVertical: 12,
-        paddingHorizontal: 20,
+        paddingHorizontal: 26,
         flexDirection: 'row',
         alignItems: 'center',
-        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
-        elevation: 8,
-        borderWidth: 3,
-        borderColor: '#FFF2D8',
-    },
-    chatButtonEmoji: {
-        fontSize: 20,
-        marginRight: 6,
+        justifyContent: 'center',
+        elevation: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        position: 'relative',
     },
     chatButtonText: {
         color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: 18,
+        fontWeight: 'bold',
         fontFamily: 'Fredoka',
+        marginLeft: 28, // să lase loc pentru iepure
     },
     chatHeader: {
         flexDirection: 'row',
@@ -329,7 +443,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#91483C',
         fontFamily: 'Fredoka',
-        marginTop:20,
+        marginTop: 20,
     },
     tabIcon: {
         width: 24,
@@ -348,23 +462,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-
-    chatButton: {
-        backgroundColor: '#F97850',
-        borderRadius: 26,
-        paddingVertical: 12,
-        paddingHorizontal: 26,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 6,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        position: 'relative',
-    },
-
     bunnyIcon: {
         position: 'absolute',
         top: -15,
@@ -372,14 +469,6 @@ const styles = StyleSheet.create({
         width: 60,
         height: 60,
         resizeMode: 'contain',
-    },
-
-    chatButtonText: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: 'bold',
-        fontFamily: 'Fredoka',
-        marginLeft: 28, // să lase loc pentru iepure
     },
     chatTitleRow: {
         flexDirection: 'row',
@@ -390,6 +479,4 @@ const styles = StyleSheet.create({
         height: 60,
         resizeMode: 'contain',
     },
-
-
 });

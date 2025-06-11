@@ -5,208 +5,186 @@ import {
     StyleSheet,
     ScrollView,
     Image,
+    TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SpendingAnalysis } from './SmartAdviceSection';
 import categoryImg from '@assets/decor/aiCategories.png';
-
-interface UnusedCategoriesCardProps {
-    analysis?: SpendingAnalysis;
-}
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface CategoryInsight {
     category: string;
-    icon: string;
-    insight: string;
-    emoji: string;
-    type: 'good' | 'neutral' | 'reminder';
+    status: 'unused' | 'underused' | 'overused' | 'balanced';
+    percentage: number;
+    trend: 'increasing' | 'decreasing' | 'stable';
+    recommendation: string;
+    action: string;
+    impact: 'high' | 'medium' | 'low';
+}
+
+interface UnusedCategoriesCardProps {
+    analysis: SpendingAnalysis | null;
 }
 
 export default function UnusedCategoriesCard({ analysis }: UnusedCategoriesCardProps): JSX.Element {
-    const getCategoryInsights = (): CategoryInsight[] => {
+    if (!analysis) {
+        return (
+            <View style={styles.container}>
+                <View style={styles.headerRow}>
+                    <Image source={categoryImg} style={styles.image} resizeMode="contain" />
+                    <View style={styles.headerText}>
+                        <Text style={styles.headerTitle}>Category Insights</Text>
+                        <Text style={styles.headerSubtitle}>Loading your category analysis...</Text>
+                    </View>
+                </View>
+            </View>
+        );
+    }
+
+    const generateCategoryInsights = (): CategoryInsight[] => {
         const insights: CategoryInsight[] = [];
-        if (!analysis) return insights;
+        const {
+            categoryBreakdown,
+            topCategories,
+            spendingPatterns,
+            totalThisMonth
+        } = analysis;
 
-        const { unusedCategories = [], categoryBreakdown = {} } = analysis;
+        // Calculate average category spending
+        const categories = Object.keys(categoryBreakdown);
+        const totalCategories = categories.length;
+        const averageSpending = totalThisMonth / totalCategories;
 
-        const categoryData = {
-            'Health': {
-                icon: 'medical',
-                good: 'Amazing! No health expenses this month! Your bunny is proud of your healthy lifestyle! 🐰💚',
-                reminder: 'No health expenses tracked. Don\'t forget routine checkups - even bunnies need their carrot vitamins! 🐰🥕',
-                emoji: '🐰🏥',
-            },
-            'Entertainment': {
-                icon: 'game-controller',
-                good: 'Wow! No entertainment spending! You\'re focusing like a determined bunny! 🐰🎯',
-                reminder: 'No fun expenses? Remember to treat yourself sometimes - all work and no play makes bunny sad! 🐰😢',
-                emoji: '🐰🎮',
-            },
-            'Lifestyle': {
-                icon: 'shirt',
-                good: 'No lifestyle purchases! Your bunny appreciates your minimalist approach! 🐰✨',
-                reminder: 'No lifestyle spending tracked. Taking care of yourself is important too! 🐰💅',
-                emoji: '🐰👗',
-            },
-            'Transport': {
-                icon: 'car',
-                good: 'No transport costs! Walking bunny style is eco-friendly and healthy! 🐰🌱',
-                reminder: 'No transport expenses? Make sure you\'re tracking all your travel costs! 🐰🚌',
-                emoji: '🐰🚗',
-            },
-            'Housing': {
-                icon: 'home',
-                good: 'No housing costs this month! Living rent-free like a wild bunny! 🐰🏠',
-                reminder: 'No housing expenses tracked. Don\'t forget utilities and rent! 🐰🏡',
-                emoji: '🐰🏠',
-            },
-            'Food & Drinks': {
-                icon: 'restaurant',
-                good: 'No food expenses? Are you living on carrots and water like a true bunny? 🐰🥕',
-                reminder: 'No food costs tracked? That\'s unusual - even bunnies need their meals! 🐰🍽️',
-                emoji: '🐰🍽️',
-            },
-            'Savings': {
-                icon: 'wallet',
-                good: 'Great savings momentum from last month! Your carrot fund is growing! 🐰💰',
-                reminder: 'No savings this month? Every carrot saved counts for the future! 🐰🥕',
-                emoji: '🐰💰',
-            },
-            'Other': {
-                icon: 'ellipsis-horizontal',
-                good: 'No miscellaneous expenses! Your bunny loves organized spending! 🐰📋',
-                reminder: 'No other expenses tracked. Sometimes unexpected costs hop in! 🐰❓',
-                emoji: '🐰📦',
-            },
-        };
+        categories.forEach(category => {
+            const spending = categoryBreakdown[category];
+            const percentage = (spending / totalThisMonth) * 100;
+            let status: 'unused' | 'underused' | 'overused' | 'balanced';
+            let impact: 'high' | 'medium' | 'low';
+            let trend: 'increasing' | 'decreasing' | 'stable' = 'stable';
+            let recommendation = '';
+            let action = '';
 
-        unusedCategories.forEach(category => {
-            const data = categoryData[category as keyof typeof categoryData];
-            if (data) {
-                let type: 'good' | 'neutral' | 'reminder' = 'neutral';
-                let insight = '';
-
-                if (['Food & Drinks', 'Housing'].includes(category)) {
-                    type = 'reminder';
-                    insight = data.reminder;
-                } else if (category === 'Health') {
-                    type = 'good';
-                    insight = data.good;
-                } else {
-                    type = 'good';
-                    insight = data.good;
-                }
-
-                insights.push({
-                    category,
-                    icon: data.icon,
-                    insight,
-                    emoji: data.emoji,
-                    type,
-                });
+            // Determine category status
+            if (spending === 0) {
+                status = 'unused';
+                impact = 'medium';
+                recommendation = `You haven't used the ${category} category this month. Consider if you're tracking all your expenses.`;
+                action = `Review your ${category} expenses`;
+            } else if (spending < averageSpending * 0.3) {
+                status = 'underused';
+                impact = 'low';
+                recommendation = `${category} spending is notably low. Make sure you're not missing any expenses in this category.`;
+                action = `Check for missing ${category} expenses`;
+            } else if (spending > averageSpending * 2) {
+                status = 'overused';
+                impact = 'high';
+                recommendation = `${category} spending is significantly higher than other categories. Consider setting a budget limit.`;
+                action = `Set a budget for ${category}`;
+            } else {
+                status = 'balanced';
+                impact = 'low';
+                recommendation = `Your ${category} spending is well-balanced relative to other categories.`;
+                action = `Maintain current ${category} spending`;
             }
+
+            // Check for spending spikes
+            const spike = spendingPatterns.recentSpikes.find(s => s.category === category);
+            if (spike) {
+                trend = 'increasing';
+                impact = 'high';
+                recommendation = `${category} spending has increased by ${spike.increase}% ${spike.timeframe}. ${recommendation}`;
+            }
+
+            insights.push({
+                category,
+                status,
+                percentage,
+                trend,
+                recommendation,
+                action,
+                impact
+            });
         });
 
-        Object.entries(categoryBreakdown).forEach(([category, amount]) => {
-            if (amount < 50 && !unusedCategories.includes(category)) {
-                const data = categoryData[category as keyof typeof categoryData];
-                if (data) {
-                    insights.push({
-                        category,
-                        icon: data.icon,
-                        insight: `Only ${amount.toFixed(0)} RON on ${category} this month! Your bunny is impressed by your restraint! 🐰👍`,
-                        emoji: data.emoji,
-                        type: 'good',
-                    });
-                }
-            }
+        // Sort insights by impact and status
+        return insights.sort((a, b) => {
+            const impactOrder = { high: 0, medium: 1, low: 2 };
+            const statusOrder = { overused: 0, unused: 1, underused: 2, balanced: 3 };
+            return impactOrder[a.impact] - impactOrder[b.impact] || 
+                   statusOrder[a.status] - statusOrder[b.status];
         });
-
-        return insights.slice(0, 6);
     };
 
-    const insights = getCategoryInsights();
-
-    const getInsightColor = (type: string) => {
-        switch (type) {
-            case 'good': return '#FFB84C';
-            case 'reminder': return '#FF7043';
-            case 'neutral': return '#FDD835';
-            default: return '#CCC';
+    const getStatusColor = (status: string): [string, string] => {
+        switch (status) {
+            case 'unused':
+                return ['#FF9800', '#FFA726'] as [string, string];
+            case 'underused':
+                return ['#4CAF50', '#66BB6A'] as [string, string];
+            case 'overused':
+                return ['#F44336', '#EF5350'] as [string, string];
+            default:
+                return ['#2196F3', '#42A5F5'] as [string, string];
         }
     };
 
-    const getInsightIcon = (type: string) => {
-        switch (type) {
-            case 'good': return 'happy';
-            case 'reminder': return 'alert-circle';
-            case 'neutral': return 'information-circle';
-            default: return 'help';
+    const getStatusIcon = (status: string) => {
+        switch (status) {
+            case 'unused':
+                return '⚠️';
+            case 'underused':
+                return '📉';
+            case 'overused':
+                return '📈';
+            default:
+                return '✅';
         }
     };
+
+    const insights = generateCategoryInsights();
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
             <View style={styles.headerRow}>
                 <Image source={categoryImg} style={styles.image} resizeMode="contain" />
                 <View style={styles.headerText}>
-                    <Text style={styles.headerTitle}>Category Analysis</Text>
-                    <Text style={styles.headerSubtitle}>Your spending patterns with bunny wisdom</Text>
-                </View>
-            </View>
-
-            {insights.length === 0 ? (
-                <View style={styles.noInsightsContainer}>
-                    <Text style={styles.noInsightsEmoji}>🐰💤</Text>
-                    <Text style={styles.noInsightsText}>
-                        All categories are active! Your bunny sees balanced spending across all areas.
+                    <Text style={styles.headerTitle}>Category Insights</Text>
+                    <Text style={styles.headerSubtitle}>
+                        Smart analysis of your spending categories
                     </Text>
                 </View>
-            ) : (
-                <View style={styles.insightsContainer}>
-                    {insights.map((insight, index) => (
-                        <View key={`${insight.category}-${index}`} style={styles.insightCard}>
-                            <View style={styles.insightHeader}>
-                                <View style={[styles.categoryIcon, { backgroundColor: getInsightColor(insight.type) + '33' }]}>
-                                    <Ionicons
-                                        name={insight.icon as any}
-                                        size={22}
-                                        color={getInsightColor(insight.type)}
-                                    />
-                                </View>
-                                <View style={styles.categoryInfo}>
-                                    <Text style={styles.categoryName}>{insight.category}</Text>
-                                    <View style={styles.statusContainer}>
-                                        <Ionicons
-                                            name={getInsightIcon(insight.type) as any}
-                                            size={16}
-                                            color={getInsightColor(insight.type)}
-                                        />
-                                        <Text style={[styles.statusText, { color: getInsightColor(insight.type) }]}>
-                                            {insight.type === 'good' ? 'Awesome!' :
-                                                insight.type === 'reminder' ? 'Heads up!' : 'Info'}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <Text style={styles.insightEmoji}>{insight.emoji}</Text>
-                            </View>
-
-                            <Text style={styles.insightText}>{insight.insight}</Text>
-                        </View>
-                    ))}
-                </View>
-            )}
-
-            <View style={styles.summaryCard}>
-                <Text style={styles.summaryTitle}>🐰 Bunny's Category Summary</Text>
-                <Text style={styles.summaryText}>
-                    You're actively spending in {Object.keys(analysis.categoryBreakdown).length} out of 8 categories.
-                    {analysis.unusedCategories.length > 0
-                        ? ` ${analysis.unusedCategories.length} categories haven't been used this month.`
-                        : ' All categories are active!'}
-                    Keep tracking to get better insights! 🥕
-                </Text>
             </View>
+
+            {insights.map((insight) => (
+                <View key={insight.category} style={styles.insightCard}>
+                    <LinearGradient
+                        colors={getStatusColor(insight.status)}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.statusBadge}
+                    >
+                        <Text style={styles.statusText}>{insight.status}</Text>
+                    </LinearGradient>
+
+                    <View style={styles.insightHeader}>
+                        <Text style={styles.statusIcon}>{getStatusIcon(insight.status)}</Text>
+                        <Text style={styles.categoryTitle}>{insight.category}</Text>
+                        <Text style={styles.percentage}>{Math.round(insight.percentage)}%</Text>
+                    </View>
+
+                    <Text style={styles.recommendation}>{insight.recommendation}</Text>
+
+                    {insight.trend === 'increasing' && (
+                        <View style={styles.trendBadge}>
+                            <Text style={styles.trendText}>🔥 Trending Up</Text>
+                        </View>
+                    )}
+
+                    <TouchableOpacity style={styles.actionButton}>
+                        <Text style={styles.actionButtonText}>{insight.action}</Text>
+                    </TouchableOpacity>
+                </View>
+            ))}
         </ScrollView>
     );
 }
@@ -214,125 +192,118 @@ export default function UnusedCategoriesCard({ analysis }: UnusedCategoriesCardP
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
     },
     headerRow: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         paddingTop: 20,
         paddingBottom: 16,
-        paddingRight: 20,
+        paddingHorizontal: 16,
     },
     image: {
-        width: 200,
-        height: 200,
-        marginRight: 0,
+        width: 120,
+        height: 120,
+        marginRight: 16,
+        alignSelf: 'center',
     },
     headerText: {
         flex: 1,
+        paddingTop: 8,
     },
     headerTitle: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: '#91483C',
+        color: '#90483c',
         fontFamily: 'Fredoka',
-        marginBottom: 4,
+        marginBottom: 8,
     },
     headerSubtitle: {
         fontSize: 14,
-        color: '#666',
+        color: '#91483C',
         fontFamily: 'Fredoka',
-    },
-    noInsightsContainer: {
-        alignItems: 'center',
-        padding: 40,
-    },
-    noInsightsEmoji: {
-        fontSize: 48,
-        marginBottom: 16,
-    },
-    noInsightsText: {
-        fontSize: 16,
-        color: '#666',
-        textAlign: 'center',
-        lineHeight: 24,
-    },
-    insightsContainer: {
-        gap: 16,
-        marginBottom: 20,
-        paddingHorizontal: 16,
+        marginTop: 4,
     },
     insightCard: {
-        backgroundColor: '#FFF6EE',
-        borderRadius: 18,
-        padding: 20,
-        borderWidth: 2,
-        borderColor: '#FFD9B5',
-        shadowColor: '#FFB84C',
-        shadowOpacity: 0.2,
-        shadowRadius: 6,
-        shadowOffset: { width: 0, height: 4 },
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    statusBadge: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    statusText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+        fontFamily: 'Fredoka',
     },
     insightHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 12,
     },
-    categoryIcon: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
+    statusIcon: {
+        fontSize: 24,
+        marginRight: 8,
     },
-    categoryInfo: {
+    categoryTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#91483C',
+        fontFamily: 'Fredoka',
         flex: 1,
     },
-    categoryName: {
-        fontSize: 18,
+    percentage: {
+        fontSize: 16,
         fontWeight: 'bold',
-        color: '#91483C',
+        color: '#666666',
         fontFamily: 'Fredoka',
     },
-    statusContainer: {
-        flexDirection: 'row',
+    recommendation: {
+        fontSize: 14,
+        color: '#666666',
+        marginBottom: 16,
+        lineHeight: 20,
+        fontFamily: 'Fredoka',
+    },
+    trendBadge: {
+        backgroundColor: '#FFF3E0',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        alignSelf: 'flex-start',
+        marginBottom: 12,
+    },
+    trendText: {
+        color: '#FF8F00',
+        fontSize: 12,
+        fontWeight: 'bold',
+        fontFamily: 'Fredoka',
+    },
+    actionButton: {
+        backgroundColor: '#F97850',
+        borderRadius: 12,
+        padding: 12,
         alignItems: 'center',
-        marginTop: 2,
+        marginTop: 8,
     },
-    statusText: {
-        marginLeft: 4,
-        fontSize: 13,
-        fontWeight: '600',
-        fontFamily: 'Fredoka',
-    },
-    insightEmoji: {
-        fontSize: 24,
-    },
-    insightText: {
-        fontSize: 15,
-        color: '#333',
-        lineHeight: 22,
-        fontFamily: 'Fredoka',
-    },
-    summaryCard: {
-        backgroundColor: '#FFF0E5',
-        borderRadius: 20,
-        padding: 20,
-        margin: 16,
-        borderColor: '#FFB84C',
-        borderWidth: 2,
-    },
-    summaryTitle: {
-        fontSize: 18,
+    actionButtonText: {
+        color: '#FFFFFF',
+        fontSize: 14,
         fontWeight: 'bold',
-        color: '#91483C',
-        fontFamily: 'Fredoka',
-        marginBottom: 8,
-    },
-    summaryText: {
-        fontSize: 15,
-        color: '#444',
-        lineHeight: 22,
         fontFamily: 'Fredoka',
     },
 });

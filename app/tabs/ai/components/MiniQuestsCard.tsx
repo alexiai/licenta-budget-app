@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
     View,
@@ -8,6 +7,7 @@ import {
     TouchableOpacity,
     Image,
     Alert,
+    ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SpendingAnalysis, ExpenseData } from './SmartAdviceSection';
@@ -26,13 +26,20 @@ interface Quest {
     description: string;
     target: number;
     current: number;
-    type: 'spending_limit' | 'category_avoid' | 'save_target' | 'daily_limit';
+    type: 'spending_limit' | 'category_avoid' | 'save_target' | 'daily_limit' | 'streak' | 'category_balance' | 'smart_saving';
     category?: string;
     emoji: string;
     difficulty: 'easy' | 'medium' | 'hard';
     points: number;
     timeframe: 'daily' | 'weekly' | 'monthly';
     isCompleted: boolean;
+    streak?: number;
+    expiresAt?: Date;
+    milestones?: {
+        target: number;
+        reward: number;
+        achieved: boolean;
+    }[];
 }
 
 interface Badge {
@@ -50,6 +57,10 @@ interface UserProgress {
     totalPoints: number;
     badges: Badge[];
     questsCompleted: number;
+    currentStreak: number;
+    lastCompletedDate?: string;
+    level: number;
+    xp: number;
 }
 
 export default function MiniQuestsCard({ analysis, expenses }: MiniQuestsCardProps): JSX.Element {
@@ -58,337 +69,262 @@ export default function MiniQuestsCard({ analysis, expenses }: MiniQuestsCardPro
         completedQuests: [],
         totalPoints: 0,
         badges: [],
-        questsCompleted: 0
+        questsCompleted: 0,
+        currentStreak: 0,
+        level: 1,
+        xp: 0
     });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (auth.currentUser && analysis) {
-            loadUserProgress();
-            generateQuests();
+        const loadUserProgress = async () => {
+            try {
+                const user = auth.currentUser;
+                if (!user) {
+                    setLoading(false);
+                    return;
+                }
+
+                const userProgressRef = doc(db, 'userProgress', user.uid);
+                const userProgressDoc = await getDoc(userProgressRef);
+                const progress = userProgressDoc.data() as UserProgress;
+
+                if (progress) {
+                    setUserProgress(progress);
+                }
+
+                // Generate quests based on user's spending patterns
+                const generatedQuests = generateQuests(expenses, analysis || null);
+                setQuests(generatedQuests);
+
+                setLoading(false);
+            } catch (error) {
+                console.error('Error loading user progress:', error);
+                setLoading(false);
+            }
+        };
+
+        loadUserProgress();
+    }, [expenses, analysis]);
+
+    const generateQuests = (expenses: ExpenseData[], analysis: SpendingAnalysis | null): Quest[] => {
+        const quests: Quest[] = [];
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+
+        // Daily spending limit quest
+        if (analysis) {
+            const dailyLimit = Math.round(analysis.averageDailySpending * 0.8);
+            quests.push({
+                id: 'daily-limit',
+                title: 'Daily Budget Master',
+                description: `Keep today's spending under ${dailyLimit} RON`,
+                target: dailyLimit,
+                current: analysis.spendingPatterns.todayTotal,
+                type: 'daily_limit',
+                emoji: '🎯',
+                difficulty: 'medium',
+                points: 50,
+                timeframe: 'daily',
+                isCompleted: analysis.spendingPatterns.todayTotal <= dailyLimit
+            });
         }
-    }, [analysis, expenses]);
 
-    const loadUserProgress = async () => {
-        try {
-            const userId = auth.currentUser?.uid;
-            if (!userId) return;
+        // Category avoidance quest
+        const highSpendingCategory = analysis?.topCategories[0]?.category;
+        if (highSpendingCategory) {
+            quests.push({
+                id: 'category-avoid',
+                title: `Skip ${highSpendingCategory} Today`,
+                description: `Avoid spending in the ${highSpendingCategory} category today`,
+                target: 0,
+                current: expenses.filter(e => 
+                    e.category === highSpendingCategory && 
+                    e.date.split('T')[0] === today
+                ).length,
+                type: 'category_avoid',
+                emoji: '🚫',
+                difficulty: 'hard',
+                points: 100,
+                timeframe: 'daily',
+                isCompleted: false
+            });
+        }
 
-            const progressDoc = await getDoc(doc(db, 'userProgress', userId));
-            if (progressDoc.exists()) {
-                const data = progressDoc.data();
-                setUserProgress({
-                    completedQuests: data.completedQuests || [],
-                    totalPoints: data.totalPoints || 0,
-                    badges: data.badges || [],
-                    questsCompleted: data.questsCompleted || 0
+        // Weekly saving target
+        if (analysis) {
+            const weeklyTarget = Math.round(analysis.weeklyStats.lastWeek * 0.9);
+            quests.push({
+                id: 'weekly-save',
+                title: 'Weekly Saver',
+                description: `Keep this week's spending under ${weeklyTarget} RON`,
+                target: weeklyTarget,
+                current: analysis.weeklyStats.currentWeek,
+                type: 'save_target',
+                emoji: '💰',
+                difficulty: 'medium',
+                points: 75,
+                timeframe: 'weekly',
+                isCompleted: analysis.weeklyStats.currentWeek <= weeklyTarget
+            });
+        }
+
+        // Category balance quest
+        if (analysis) {
+            const essentialRatio = analysis.spendingPatterns.essentialVsFlexible.essential / 
+                (analysis.spendingPatterns.essentialVsFlexible.essential + analysis.spendingPatterns.essentialVsFlexible.flexible);
+            
+            if (essentialRatio < 0.5) {
+                quests.push({
+                    id: 'category-balance',
+                    title: 'Essential Balance',
+                    description: 'Increase essential spending to 50% of total',
+                    target: 50,
+                    current: Math.round(essentialRatio * 100),
+                    type: 'category_balance',
+                    emoji: '⚖️',
+                    difficulty: 'hard',
+                    points: 100,
+                    timeframe: 'monthly',
+                    isCompleted: essentialRatio >= 0.5
                 });
             }
-        } catch (error) {
-            console.error('Error loading user progress:', error);
-        } finally {
-            setLoading(false);
         }
+
+        // Smart saving quest
+        if (analysis) {
+            const monthlyTarget = Math.round(analysis.totalThisMonth * 0.85);
+            quests.push({
+                id: 'smart-save',
+                title: 'Smart Saver',
+                description: `Keep this month's spending under ${monthlyTarget} RON`,
+                target: monthlyTarget,
+                current: analysis.totalThisMonth,
+                type: 'smart_saving',
+                emoji: '🧠',
+                difficulty: 'hard',
+                points: 150,
+                timeframe: 'monthly',
+                isCompleted: analysis.totalThisMonth <= monthlyTarget
+            });
+        }
+
+        return quests;
     };
 
     const canCompleteQuest = (quest: Quest): boolean => {
-        const now = new Date();
-        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
-        const weeklyExpenses = expenses.filter(e => new Date(e.date) >= startOfWeek);
-        const weeklyTotal = weeklyExpenses.reduce((sum, e) => sum + e.amount, 0);
-
-        switch (quest.id) {
-            case 'weekly-limit':
-                return weeklyTotal <= quest.target;
-            case 'no-coffee-shop':
-                const coffeeThisWeek = weeklyExpenses.filter(e => e.subcategory === 'Coffee').length;
-                return coffeeThisWeek === 0 && new Date().getDay() >= 3;
-            case 'restaurant-limit':
-                const restaurantThisWeek = weeklyExpenses.filter(e => e.subcategory === 'Restaurant').length;
-                return restaurantThisWeek <= quest.target;
-            case 'daily-limit':
-                const todayExpenses = expenses.filter(e => {
-                    const today = new Date().toISOString().split('T')[0];
-                    return e.date.split('T')[0] === today;
-                });
-                const todayTotal = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
-                return todayTotal <= quest.target;
-            case 'holiday-budget':
-                return analysis ? analysis.totalThisMonth <= quest.target : false;
-            default:
-                return quest.current >= quest.target;
-        }
-    };
-
-    const saveUserProgress = async (newProgress: UserProgress) => {
-        try {
-            const userId = auth.currentUser?.uid;
-            if (!userId) return;
-
-            await setDoc(doc(db, 'userProgress', userId), newProgress, { merge: true });
-            setUserProgress(newProgress);
-        } catch (error) {
-            console.error('Error saving user progress:', error);
-        }
-    };
-
-    const generateQuests = () => {
-        if (!analysis) return;
-
-        const newQuests: Quest[] = [];
-        const now = new Date();
-        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-        // Initialize badges if they don't exist
-        if (userProgress.badges.length === 0) {
-            const initialBadges = checkForNewBadges(userProgress);
-            setUserProgress(prev => ({
-                ...prev,
-                badges: initialBadges
-            }));
-        }
-
-        // Weekly spending limit quest
-        const weeklyExpenses = expenses.filter(e => new Date(e.date) >= startOfWeek);
-        const weeklyTotal = weeklyExpenses.reduce((sum, e) => sum + e.amount, 0);
-
-        newQuests.push({
-            id: 'weekly-limit',
-            title: '🎯 Weekly Budget Challenge',
-            description: 'Keep your weekly spending under 300 RON',
-            target: 300,
-            current: weeklyTotal,
-            type: 'spending_limit',
-            emoji: '🐰💰',
-            difficulty: 'medium',
-            points: 15,
-            timeframe: 'weekly',
-            isCompleted: weeklyTotal <= 300
-        });
-
-        // No coffee shop quest (if user has coffee spending)
-        const coffeeThisWeek = weeklyExpenses
-            .filter(e => e.subcategory === 'Coffee')
-            .length;
-
-        if (analysis.subcategoryBreakdown['Coffee'] > 50) {
-            newQuests.push({
-                id: 'no-coffee-shop',
-                title: '☕ Home Brew Hero',
-                description: 'Skip coffee shops for 3 days this week',
-                target: 3,
-                current: Math.max(0, 3 - coffeeThisWeek),
-                type: 'category_avoid',
-                category: 'Coffee',
-                emoji: '🐰☕',
-                difficulty: 'easy',
-                points: 10,
-                timeframe: 'weekly',
-                isCompleted: coffeeThisWeek === 0 && new Date().getDay() >= 3
-            });
-        }
-
-        // Restaurant limit quest
-        const restaurantThisWeek = weeklyExpenses
-            .filter(e => e.subcategory === 'Restaurant')
-            .length;
-
-        newQuests.push({
-            id: 'restaurant-limit',
-            title: '🍽️ Cooking Champion',
-            description: 'Eat out maximum 2 times this week',
-            target: 2,
-            current: restaurantThisWeek,
-            type: 'category_avoid',
-            category: 'Restaurant',
-            emoji: '🐰👨‍🍳',
-            difficulty: 'medium',
-            points: 20,
-            timeframe: 'weekly',
-            isCompleted: restaurantThisWeek <= 2
-        });
-
-        // Daily spending quest
-        const todayExpenses = expenses.filter(e => {
-            const today = new Date().toISOString().split('T')[0];
-            return e.date.split('T')[0] === today;
-        });
-        const todayTotal = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
-
-        newQuests.push({
-            id: 'daily-limit',
-            title: '📅 Daily Discipline',
-            description: 'Keep today\'s spending under 50 RON',
-            target: 50,
-            current: todayTotal,
-            type: 'daily_limit',
-            emoji: '🐰🎯',
-            difficulty: 'easy',
-            points: 5,
-            timeframe: 'daily',
-            isCompleted: todayTotal <= 50
-        });
-
-        // Seasonal quest based on month
-        if (analysis.seasonalContext.month === 'December') {
-            newQuests.push({
-                id: 'holiday-budget',
-                title: '🎄 Holiday Budget Master',
-                description: 'Keep holiday spending under 500 RON',
-                target: 500,
-                current: analysis.totalThisMonth,
-                type: 'spending_limit',
-                emoji: '🐰🎁',
-                difficulty: 'hard',
-                points: 30,
-                timeframe: 'monthly',
-                isCompleted: analysis.totalThisMonth <= 500
-            });
-        }
-
-        // Update progress for existing quests
-        const updatedQuests = newQuests.map(quest => ({
-            ...quest,
-            isCompleted: userProgress.completedQuests.includes(quest.id) || quest.isCompleted
-        }));
-
-        setQuests(updatedQuests);
+        if (quest.isCompleted) return false;
+        return quest.current >= quest.target;
     };
 
     const completeQuest = async (quest: Quest) => {
-        if (quest.isCompleted || userProgress.completedQuests.includes(quest.id)) {
-            return;
-        }
-
-        // Check if quest can actually be completed
-        if (!canCompleteQuest(quest)) {
-            Alert.alert('Quest Not Ready', 'You haven\'t met the requirements for this quest yet!');
-            return;
-        }
-
-        const newProgress = {
-            ...userProgress,
-            completedQuests: [...userProgress.completedQuests, quest.id],
-            totalPoints: userProgress.totalPoints + quest.points,
-            questsCompleted: userProgress.questsCompleted + 1
-        };
-
-        // Check for new badges
-        const newBadges = checkForNewBadges(newProgress);
-        newProgress.badges = newBadges;
-
-        await saveUserProgress(newProgress);
-
-        // Update quest status
-        setQuests(prev => prev.map(q =>
-            q.id === quest.id ? { ...q, isCompleted: true } : q
-        ));
-
-        // Show completion message
-        Alert.alert(
-            '🎉 Quest Completed!',
-            `You earned ${quest.points} CarrotCoins! ${quest.emoji}`,
-            [{ text: 'Hop on!', style: 'default' }]
-        );
-
-        // Check if user earned a new badge
-        const earnedBadge = newBadges.find(b =>
-            b.earned && !userProgress.badges.find(ub => ub.id === b.id)?.earned
-        );
-
-        if (earnedBadge) {
-            setTimeout(() => {
-                Alert.alert(
-                    '🏆 New Badge Earned!',
-                    `${earnedBadge.emoji} ${earnedBadge.name}\n${earnedBadge.description}`,
-                    [{ text: 'Amazing!', style: 'default' }]
-                );
-            }, 1000);
-        }
-    };
-
-    const checkForNewBadges = (progress: UserProgress): Badge[] => {
-        const badges: Badge[] = [
-            {
-                id: 'curious-bunny',
-                name: 'Curious Bunny',
-                emoji: '🐰🔍',
-                description: 'Completed your first quest',
-                requirement: 1,
-                earned: progress.questsCompleted >= 1
-            },
-            {
-                id: 'mini-hops',
-                name: 'Mini Hops',
-                emoji: '🐰🥉',
-                description: 'Completed 5 quests',
-                requirement: 5,
-                earned: progress.questsCompleted >= 5
-            },
-            {
-                id: 'hop-master',
-                name: 'Hop Master',
-                emoji: '🐰🥈',
-                description: 'Completed 10 quests',
-                requirement: 10,
-                earned: progress.questsCompleted >= 10
-            },
-            {
-                id: 'quest-legend',
-                name: 'Quest Legend',
-                emoji: '🐰🥇',
-                description: 'Completed 25 quests',
-                requirement: 25,
-                earned: progress.questsCompleted >= 25
-            },
-            {
-                id: 'bunny-hero',
-                name: 'Bunny Hero',
-                emoji: '🐰🦸',
-                description: 'Completed 50 quests',
-                requirement: 50,
-                earned: progress.questsCompleted >= 50
-            },
-            {
-                id: 'golden-whiskers',
-                name: 'Golden Whiskers',
-                emoji: '🐰👑',
-                description: 'Completed 100 quests',
-                requirement: 100,
-                earned: progress.questsCompleted >= 100
+        try {
+            const user = auth.currentUser;
+            if (!user) {
+                Alert.alert('Error', 'You must be logged in to complete quests.');
+                return;
             }
-        ];
 
-        return badges.map(badge => {
-            const existingBadge = progress.badges.find(b => b.id === badge.id);
-            return {
-                ...badge,
-                earnedDate: badge.earned && !existingBadge?.earned
-                    ? new Date()
-                    : existingBadge?.earnedDate || undefined
+            const userProgressRef = doc(db, 'userProgress', user.uid);
+            const userProgressDoc = await getDoc(userProgressRef);
+            const currentProgress = userProgressDoc.data() as UserProgress || {
+                completedQuests: [],
+                totalPoints: 0,
+                badges: [],
+                questsCompleted: 0,
+                currentStreak: 0,
+                level: 1,
+                xp: 0
             };
-        });
-    };
 
-    const getProgressWidth = (quest: Quest) => {
-        if (quest.type === 'category_avoid') {
-            return Math.min((quest.current / quest.target) * 100, 100);
+            // Update user progress
+            const updatedProgress: UserProgress = {
+                ...currentProgress,
+                completedQuests: [...currentProgress.completedQuests, quest.id],
+                totalPoints: currentProgress.totalPoints + quest.points,
+                questsCompleted: currentProgress.questsCompleted + 1,
+                currentStreak: quest.type === 'streak' ? currentProgress.currentStreak + 1 : currentProgress.currentStreak,
+                lastCompletedDate: new Date().toISOString().split('T')[0]
+            };
+
+            // Check for badge unlocks
+            const updatedBadges = currentProgress.badges.map(badge => {
+                if (!badge.earned && updatedProgress.questsCompleted >= badge.requirement) {
+                    return {
+                        ...badge,
+                        earned: true,
+                        earnedDate: new Date()
+                    };
+                }
+                return badge;
+            });
+
+            updatedProgress.badges = updatedBadges;
+
+            // Update level and XP
+            const xpGained = quest.points * 10;
+            const newXP = currentProgress.xp + xpGained;
+            const xpPerLevel = 1000;
+            const newLevel = Math.floor(newXP / xpPerLevel) + 1;
+
+            updatedProgress.xp = newXP;
+            updatedProgress.level = newLevel;
+
+            // Save to Firestore
+            await setDoc(userProgressRef, updatedProgress);
+
+            // Update local state
+            setUserProgress(updatedProgress);
+            setQuests(quests.map(q => 
+                q.id === quest.id ? { ...q, isCompleted: true } : q
+            ));
+
+            // Show completion message
+            Alert.alert(
+                '🎉 Quest Completed!',
+                `Congratulations! You've earned ${quest.points} CarrotCoins and ${xpGained} XP!${
+                    newLevel > currentProgress.level ? `\n\n🌟 Level Up! You're now level ${newLevel}!` : ''
+                }`,
+                [{ text: 'OK', style: 'default' }]
+            );
+        } catch (error) {
+            console.error('Error completing quest:', error);
+            Alert.alert('Error', 'Failed to complete quest. Please try again.');
         }
-        return Math.min((quest.current / quest.target) * 100, 100);
     };
 
-    const getProgressColor = (quest: Quest) => {
-        const progress = getProgressWidth(quest);
+    const getProgressWidth = (quest: Quest): number => {
+        if (quest.isCompleted) return 100;
+        if (quest.target === 0) return 0;
+        const progress = (quest.current / quest.target) * 100;
+        return Math.min(Math.max(progress, 0), 100);
+    };
+
+    const getProgressColor = (quest: Quest): string => {
         if (quest.isCompleted) return '#4CAF50';
-        if (progress > 80) return '#FF6B6B';
-        if (progress > 50) return '#FFA726';
+        const progress = getProgressWidth(quest);
+        if (progress >= 75) return '#4CAF50';
+        if (progress >= 50) return '#FF8F00';
+        if (progress >= 25) return '#F97850';
         return '#4ECDC4';
+    };
+
+    const getTimeframeText = (timeframe: string): string => {
+        switch (timeframe) {
+            case 'daily':
+                return 'Daily Quest';
+            case 'weekly':
+                return 'Weekly Quest';
+            case 'monthly':
+                return 'Monthly Quest';
+            default:
+                return 'Quest';
+        }
     };
 
     if (loading) {
         return (
-            <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+            <View style={styles.container}>
                 <View style={styles.headerRow}>
                     <Image source={questsImg} style={styles.image} resizeMode="contain" />
                     <View style={styles.headerText}>
@@ -396,7 +332,11 @@ export default function MiniQuestsCard({ analysis, expenses }: MiniQuestsCardPro
                         <Text style={styles.headerSubtitle}>Loading your challenges...</Text>
                     </View>
                 </View>
-            </ScrollView>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#91483C" />
+                    <Text style={styles.loadingText}>Loading your quests...</Text>
+                </View>
+            </View>
         );
     }
 
@@ -487,12 +427,16 @@ export default function MiniQuestsCard({ analysis, expenses }: MiniQuestsCardPro
                                 </Text>
                             </TouchableOpacity>
                         )}
+
+                        <Text style={styles.timeframe}>
+                            {getTimeframeText(quest.timeframe)}
+                        </Text>
                     </View>
                 ))}
             </View>
 
             {/* Badges Section */}
-            {userProgress.badges.length > 0 && (
+            {userProgress.badges && userProgress.badges.length > 0 && (
                 <View style={styles.badgesContainer}>
                     <Text style={styles.badgesTitle}>🏆 Your Badges</Text>
                     <View style={styles.badgesGrid}>
@@ -521,40 +465,52 @@ export default function MiniQuestsCard({ analysis, expenses }: MiniQuestsCardPro
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
+    container: {
+        flex: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    },
     headerRow: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         paddingTop: 20,
         paddingBottom: 16,
-        paddingRight: 20,
+        paddingHorizontal: 16,
     },
     image: {
-        width: 200,
-        height: 200,
-        marginRight: 0,
+        width: 120,
+        height: 120,
+        marginRight: 16,
+        alignSelf: 'center',
     },
-    headerText: { flex: 1 },
+    headerText: {
+        flex: 1,
+        paddingTop: 8,
+    },
     headerTitle: {
         fontSize: 22,
         fontWeight: 'bold',
         color: '#90483c',
         fontFamily: 'Fredoka',
-        marginBottom: 4,
+        marginBottom: 8,
     },
     headerSubtitle: {
         fontSize: 14,
         color: '#91483C',
         fontFamily: 'Fredoka',
+        marginTop: 4,
     },
     progressCard: {
-        backgroundColor: '#E8F5E8',
-        borderRadius: 20,
-        padding: 20,
-        marginHorizontal: 16,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
         marginBottom: 16,
-        borderWidth: 2,
-        borderColor: '#4CAF50',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        borderWidth: 1,
+        borderColor: '#f0f0f0',
     },
     progressHeader: {
         flexDirection: 'row',
@@ -584,16 +540,16 @@ const styles = StyleSheet.create({
         fontFamily: 'Fredoka',
     },
     questsContainer: {
-        paddingHorizontal: 16,
-        gap: 16,
+        marginBottom: 16,
     },
     questCard: {
-        backgroundColor: '#FFF0E0',
-        borderRadius: 20,
-        padding: 20,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 12,
         borderWidth: 2,
-        borderColor: '#FFD4A8',
-        elevation: 4,
+        borderColor: '#E0E0E0',
+        elevation: 2,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
@@ -606,7 +562,7 @@ const styles = StyleSheet.create({
     questHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 12,
     },
     questEmoji: {
         fontSize: 24,
@@ -616,7 +572,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     questTitle: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
         color: '#91483C',
         fontFamily: 'Fredoka',
@@ -626,6 +582,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
         fontFamily: 'Fredoka',
+        marginBottom: 8,
     },
     questPoints: {
         backgroundColor: '#FF8F00',
@@ -649,8 +606,8 @@ const styles = StyleSheet.create({
         height: 8,
         backgroundColor: '#E0E0E0',
         borderRadius: 4,
-        marginRight: 12,
         overflow: 'hidden',
+        marginRight: 12,
     },
     progressFill: {
         height: '100%',
@@ -661,6 +618,8 @@ const styles = StyleSheet.create({
         color: '#666',
         fontFamily: 'Fredoka',
         fontWeight: 'bold',
+        minWidth: 60,
+        textAlign: 'right',
     },
     completedBadge: {
         flexDirection: 'row',
@@ -678,26 +637,26 @@ const styles = StyleSheet.create({
         fontFamily: 'Fredoka',
     },
     questButton: {
-        backgroundColor: '#E0E0E0',
+        backgroundColor: '#F97850',
         borderRadius: 12,
         padding: 12,
         alignItems: 'center',
+        marginTop: 8,
     },
     questButtonActive: {
         backgroundColor: '#4CAF50',
     },
     questButtonText: {
-        fontSize: 14,
-        color: '#666',
+        color: '#FFFFFF',
         fontWeight: 'bold',
         fontFamily: 'Fredoka',
+        fontSize: 14,
     },
     questButtonTextActive: {
         color: 'white',
     },
     badgesContainer: {
         marginTop: 24,
-        paddingHorizontal: 16,
         marginBottom: 20,
     },
     badgesTitle: {
@@ -745,5 +704,25 @@ const styles = StyleSheet.create({
         color: '#666',
         textAlign: 'center',
         fontFamily: 'Fredoka',
+    },
+    timeframe: {
+        fontSize: 12,
+        color: '#666',
+        fontFamily: 'Fredoka',
+        fontWeight: 'bold',
+        marginTop: 8,
+        textAlign: 'right',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    loadingText: {
+        fontSize: 14,
+        color: '#91483C',
+        fontFamily: 'Fredoka',
+        marginTop: 8,
     },
 });

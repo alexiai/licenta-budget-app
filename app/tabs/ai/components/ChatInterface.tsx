@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -8,7 +7,9 @@ import {
     TextInput,
     ScrollView,
     Alert,
-    ActivityIndicator,ImageBackground, Image
+    ActivityIndicator,
+    ImageBackground,
+    Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
@@ -16,8 +17,11 @@ import categories from '../../../../lib/categories';
 import { addDoc, collection } from 'firebase/firestore';
 import { auth, db } from '../../../../lib/firebase';
 import { romanianToEnglish } from '../../../../lib/translationDictionary';
-import { findCategoryByProduct } from '../../../../lib/productAssociation';
+import { findCategoryByProduct, findCategoryByContext, ReceiptContext } from '../../../../lib/productAssociation';
 import bg from '@assets/bg/AIback.png'; // fundalul principal
+import { useRouter } from 'expo-router';
+import { useOCR, OCRDataProvider } from '../context/OCRContext';
+import { addDocWithCache } from '../../../../lib/firebase';
 
 
 
@@ -31,20 +35,67 @@ interface ChatMessage {
 }
 
 interface ParsedExpense {
+    amount: number;
+    category: string;
+    subcategory: string;
+    date: string;
+    note: string;
+}
+
+interface ExpenseInput {
     amount?: number;
     category?: string;
     subcategory?: string;
     date?: string;
     note?: string;
-    confidence: number;
 }
+
+type PartialExpense = Partial<ParsedExpense>;
 
 interface QuickReply {
     text: string;
     action: () => void;
 }
 
+interface LocalizedTexts {
+    [key: string]: {
+        en: string;
+        ro: string;
+    };
+}
+
+// Add new correction patterns
+const CORRECTION_PATTERNS = {
+    amount: [
+        /(?:the )?(?:total|amount|cost|price) (?:was|should be|is) (\d+(?:[.,]\d{1,2})?)/i,
+        /(?:it|that) (?:costs?|was) (\d+(?:[.,]\d{1,2})?)/i,
+        /(?:not|incorrect|wrong|no,?) (?:it was|it's|its) (\d+(?:[.,]\d{1,2})?)/i,
+        /(\d+(?:[.,]\d{1,2})?) (?:lei|ron|euros?|dollars?|\$|€)/i
+    ],
+    date: [
+        /(?:the )?date (?:was|should be|is) (today|yesterday|[\d\/\.-]+)/i,
+        /(?:it was|happened|occurred) (today|yesterday|[\d\/\.-]+)/i,
+        /(?:not|incorrect|wrong|no,?) (?:it was) (today|yesterday|[\d\/\.-]+)/i
+    ],
+    category: [
+        /(?:it was|it's|its)(?: a)? (.+?) expense/i,
+        /(?:the )?category (?:was|should be|is) (.+)/i,
+        /(?:it's|its|it was)(?: for)? (.+?)(?:, not|not| instead)/i
+    ]
+};
+
+// Add new interface for correction state
+interface CorrectionState {
+    originalExpense: ParsedExpense;
+    correctedFields: Set<keyof ParsedExpense>;
+}
+
+// Add receipt context tracking
+const [recentReceipts, setRecentReceipts] = useState<ReceiptContext[]>([]);
+
 export default function ChatInterface(): JSX.Element {
+    const router = useRouter();
+    const { ocrData, setOCRData } = useOCR();
 
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
@@ -58,7 +109,7 @@ export default function ChatInterface(): JSX.Element {
     const [inputText, setInputText] = useState('');
     const [isListening, setIsListening] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [currentParsing, setCurrentParsing] = useState<Partial<ParsedExpense> | null>(null);
+    const [currentParsing, setCurrentParsing] = useState<ExpenseInput | null>(null);
     const [awaitingInput, setAwaitingInput] = useState<string | null>(null);
     const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
     const [userLanguage, setUserLanguage] = useState<'en' | 'ro'>('en'); // Track user's preferred language
@@ -66,14 +117,45 @@ export default function ChatInterface(): JSX.Element {
     const scrollViewRef = useRef<ScrollView | null>(null);
     const [recognition, setRecognition] = useState<any>(null);
 
+    // Add correction state to component state
+    const [correctionState, setCorrectionState] = useState<CorrectionState | null>(null);
+
+    // Add state for OCR confirmation
+    const [pendingExpense, setPendingExpense] = useState<ParsedExpense | null>(null);
+
+    // Initialize OCR provider
     useEffect(() => {
-        initializeSpeechRecognition();
-        return () => {
-            if (recognition) {
-                recognition.abort();
-            }
-        };
-    }, []);
+        OCRDataProvider.init(setOCRData);
+    }, [setOCRData]);
+
+    // Handle OCR data when it changes
+    useEffect(() => {
+        if (ocrData) {
+            // Show confirmation message
+            addMessage(`I found the following expense details from your receipt:
+Amount: ${ocrData.amount} RON
+Category: ${ocrData.category}
+Subcategory: ${ocrData.subcategory}
+Date: ${ocrData.date}
+
+Is this correct?`, false);
+
+            // Add quick reply buttons
+            setQuickReplies([
+                {
+                    text: 'Yes, save it',
+                    action: () => confirmAndSaveExpense(ocrData)
+                },
+                {
+                    text: 'No, needs changes',
+                    action: () => handleExpenseCorrection(ocrData)
+                }
+            ]);
+
+            // Clear OCR data
+            setOCRData(null);
+        }
+    }, [ocrData]);
 
     const initializeSpeechRecognition = () => {
         try {
@@ -282,112 +364,117 @@ export default function ChatInterface(): JSX.Element {
             }
         }
 
+        // Check for absolute date patterns
+        const absoluteDatePatterns = [
+            /(?:azi|today|astăzi)/gi,
+            /(?:ieri|yesterday)/gi,
+            /(?:alaltăieri|day before yesterday)/gi,
+            /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/,
+        ];
+
+        for (const pattern of absoluteDatePatterns) {
+            if (pattern.test(combinedText)) {
+                if (/(?:azi|today|astăzi)/gi.test(combinedText)) {
+                    return new Date().toISOString().split('T')[0];
+                } else if (/(?:ieri|yesterday)/gi.test(combinedText)) {
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    return yesterday.toISOString().split('T')[0];
+                } else if (/(?:alaltăieri|day before yesterday)/gi.test(combinedText)) {
+                    const dayBefore = new Date();
+                    dayBefore.setDate(dayBefore.getDate() - 2);
+                    return dayBefore.toISOString().split('T')[0];
+                } else {
+                    const dateMatch = combinedText.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+                    if (dateMatch) {
+                        const day = parseInt(dateMatch[1]);
+                        const month = parseInt(dateMatch[2]) - 1;
+                        const year = parseInt(dateMatch[3]);
+                        const fullYear = year < 100 ? 2000 + year : year;
+
+                        const parsedDate = new Date(fullYear, month, day);
+                        if (!isNaN(parsedDate.getTime())) {
+                            return parsedDate.toISOString().split('T')[0];
+                        }
+                    }
+                }
+                break;
+            }
+        }
+
         return null;
     };
 
-    const parseExpenseFromText = async (text: string): Promise<ParsedExpense> => {
-        const originalText = text;
-        let translatedText = text;
+    const parseExpenseFromText = async (text: string): Promise<ExpenseInput> => {
+        console.log('🔍 Parsing expense from text:', text);
+        const result: ExpenseInput = {
+            note: text
+        };
+        const textToAnalyze = text.toLowerCase() || '';
 
-        const detectedLang = await detectLanguage(text);
-        if (detectedLang === 'ro') {
-            translatedText = await translateText(text, 'ro', 'en');
+        // Try context-aware category matching first
+        const contextMatch = findCategoryByContext(textToAnalyze, recentReceipts);
+        if (contextMatch) {
+            result.category = contextMatch.category;
+            result.subcategory = contextMatch.subcategory;
+            console.log('📊 Found category from context:', { category: result.category, subcategory: result.subcategory });
         }
 
-        const result: ParsedExpense = {
-            note: originalText,
-            confidence: 0,
-        };
-
+        // Enhanced amount patterns
         const amountPatterns = [
+            // Currency symbols and words
             /(\d+(?:[.,]\d{1,2})?)\s*(?:lei|ron|euros?|dollars?|\$|€)/gi,
-            /(?:spent|cheltuit|plătit|cost|costa)\s*(\d+(?:[.,]\d{1,2})?)/gi,
-            /(\d+(?:[.,]\d{1,2})?)\s*(?:for|pentru)/gi,
+            // Verbs indicating spending
+            /(?:spent|cheltuit|plătit|platit|cost|costa|paid|am dat)\s*(\d+(?:[.,]\d{1,2})?)/gi,
+            // Prepositions
+            /(\d+(?:[.,]\d{1,2})?)\s*(?:for|pentru|pe|on)/gi,
+            // Standalone numbers with decimals
+            /(?:^|\s)(\d+(?:[.,]\d{1,2}))(?:\s|$)/g,
+            // Numbers at the start of text
+            /^(\d+(?:[.,]\d{1,2})?)\s/g
         ];
 
         for (const pattern of amountPatterns) {
-            const match = text.match(pattern);
-            if (match) {
-                const numberMatch = match[0].match(/(\d+(?:[.,]\d{1,2})?)/);
+            const matches = textToAnalyze.matchAll(pattern);
+            for (const match of Array.from(matches)) {
+                const numberMatch = match[1]?.match(/(\d+(?:[.,]\d{1,2})?)/);
                 if (numberMatch) {
-                    result.amount = parseFloat(numberMatch[1].replace(',', '.'));
-                    result.confidence += 30;
-                    break;
-                }
-            }
-        }
-
-        const combinedText = (originalText + ' ' + translatedText).toLowerCase();
-
-        const relativeDate = parseRelativeDate(combinedText);
-        if (relativeDate) {
-            result.date = relativeDate;
-            result.confidence += 25;
-        } else {
-            const absoluteDatePatterns = [
-                /(?:azi|today|astăzi)/gi,
-                /(?:ieri|yesterday)/gi,
-                /(?:alaltăieri|day before yesterday)/gi,
-                /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/,
-            ];
-
-            for (const pattern of absoluteDatePatterns) {
-                if (pattern.test(text)) {
-                    if (/(?:azi|today|astăzi)/gi.test(text)) {
-                        result.date = new Date().toISOString().split('T')[0];
-                    } else if (/(?:ieri|yesterday)/gi.test(text)) {
-                        const yesterday = new Date();
-                        yesterday.setDate(yesterday.getDate() - 1);
-                        result.date = yesterday.toISOString().split('T')[0];
-                    } else if (/(?:alaltăieri|day before yesterday)/gi.test(text)) {
-                        const dayBefore = new Date();
-                        dayBefore.setDate(dayBefore.getDate() - 2);
-                        result.date = dayBefore.toISOString().split('T')[0];
-                    } else {
-                        const dateMatch = text.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
-                        if (dateMatch) {
-                            const day = parseInt(dateMatch[1]);
-                            const month = parseInt(dateMatch[2]) - 1;
-                            const year = parseInt(dateMatch[3]);
-                            const fullYear = year < 100 ? 2000 + year : year;
-
-                            const parsedDate = new Date(fullYear, month, day);
-                            if (!isNaN(parsedDate.getTime())) {
-                                result.date = parsedDate.toISOString().split('T')[0];
-                            }
-                        }
+                    const amount = parseFloat(numberMatch[1].replace(',', '.'));
+                    if (!isNaN(amount) && amount > 0) {
+                        result.amount = amount;
+                        console.log('💰 Found amount:', amount, 'from pattern:', pattern);
+                        break;
                     }
-                    result.confidence += 20;
-                    break;
+                }
+            }
+            if (result.amount) break;
+        }
+
+        if (textToAnalyze) {
+            const relativeDate = parseRelativeDate(textToAnalyze);
+            if (relativeDate) {
+                result.date = relativeDate;
+                console.log('📅 Found relative date:', relativeDate);
+            } else {
+                const absoluteDate = parseAbsoluteDate(textToAnalyze);
+                if (absoluteDate) {
+                    result.date = absoluteDate;
+                    console.log('📅 Found absolute date:', absoluteDate);
                 }
             }
         }
 
-        const categoryText = (originalText + ' ' + translatedText).toLowerCase();
-        console.log(`🔍 Analyzing text for categories: "${categoryText}"`);
-
-        const productMatch = findCategoryByProduct(categoryText);
-        if (productMatch) {
-            result.category = productMatch.category;
-            result.subcategory = productMatch.subcategory;
-            result.confidence += productMatch.confidence;
-            console.log(`✅ Product association match: ${productMatch.category} (${productMatch.subcategory}) - confidence: ${productMatch.confidence}%`);
-        } else {
-            const categoryMapping = createCategoryMapping();
-            for (const [keywords, categoryInfo] of Object.entries(categoryMapping)) {
-                const keywordList = keywords.split(',').map(k => k.trim().toLowerCase());
-                if (keywordList.some(keyword => categoryText.includes(keyword))) {
-                    result.category = categoryInfo.category;
-                    result.subcategory = categoryInfo.subcategory;
-                    result.confidence += 25;
-                    console.log(`✅ Manual mapping match: ${categoryInfo.category} (${categoryInfo.subcategory})`);
-                    break;
-                }
+        // If no category found through context, try regular product matching
+        if (!result.category) {
+            const productMatch = findCategoryByProduct(textToAnalyze);
+            if (productMatch) {
+                result.category = productMatch.category;
+                result.subcategory = productMatch.subcategory;
+                console.log('📊 Found category from product:', { category: result.category, subcategory: result.subcategory });
             }
         }
 
-        console.log(`📊 Parsing result: amount=${result.amount}, category=${result.category}, date=${result.date}, confidence=${result.confidence}`);
-
+        console.log('✨ Final parsed expense:', result);
         return result;
     };
 
@@ -440,7 +527,7 @@ export default function ChatInterface(): JSX.Element {
     };
 
     const getLocalizedText = (key: string, language: 'en' | 'ro' = userLanguage): string => {
-        const texts = {
+        const texts: LocalizedTexts = {
             amountQuestion: {
                 en: 'How much did you spend? Please specify the amount.',
                 ro: 'Cât ai cheltuit? Te rog să specifici suma.'
@@ -490,7 +577,7 @@ export default function ChatInterface(): JSX.Element {
         return texts[key]?.[language] || texts[key]?.en || key;
     };
 
-    const generateFollowUpQuestions = (parsed: ParsedExpense) => {
+    const generateFollowUpQuestions = (parsed: ExpenseInput, onComplete?: () => void): void => {
         const questions: string[] = [];
         const replies: QuickReply[] = [];
 
@@ -501,22 +588,8 @@ export default function ChatInterface(): JSX.Element {
             questions.push(getLocalizedText('dateQuestion'));
 
             const dateOptions = [
-                { text: getLocalizedText('today'), date: new Date().toISOString().split('T')[0] },
-                { text: getLocalizedText('yesterday'), date: (() => {
-                        const yesterday = new Date();
-                        yesterday.setDate(yesterday.getDate() - 1);
-                        return yesterday.toISOString().split('T')[0];
-                    })() },
-                { text: getLocalizedText('twoDaysAgo'), date: (() => {
-                        const twoDaysAgo = new Date();
-                        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-                        return twoDaysAgo.toISOString().split('T')[0];
-                    })() },
-                { text: getLocalizedText('oneWeekAgo'), date: (() => {
-                        const weekAgo = new Date();
-                        weekAgo.setDate(weekAgo.getDate() - 7);
-                        return weekAgo.toISOString().split('T')[0];
-                    })() }
+                { text: 'Today', date: new Date().toISOString().split('T')[0] },
+                { text: 'Yesterday', date: new Date(Date.now() - 86400000).toISOString().split('T')[0] }
             ];
 
             dateOptions.forEach(option => {
@@ -528,8 +601,8 @@ export default function ChatInterface(): JSX.Element {
                         setQuickReplies([]);
                         setAwaitingInput(null);
 
-                        if (updatedParsing.amount && updatedParsing.category && updatedParsing.subcategory) {
-                            saveExpense(updatedParsing);
+                        if (updatedParsing.amount && updatedParsing.category && updatedParsing.subcategory && updatedParsing.note) {
+                            saveExpense(updatedParsing as ParsedExpense);
                         } else {
                             generateFollowUpQuestions(updatedParsing);
                         }
@@ -557,7 +630,8 @@ export default function ChatInterface(): JSX.Element {
             const categoryData = categories.find(c => c.label === parsed.category);
             if (categoryData) {
                 askForSubcategory(parsed.category, categoryData.subcategories);
-                return true;
+                onComplete?.();
+                return;
             }
         }
 
@@ -567,10 +641,15 @@ export default function ChatInterface(): JSX.Element {
                 setQuickReplies(replies);
             }
             speakText(questions[0]);
-            return true;
+            onComplete?.();
+            return;
         }
 
-        return false;
+        // If we get here, we have all the data we need
+        if (isValidExpense(parsed)) {
+            saveExpense(parsed as ParsedExpense);
+        }
+        onComplete?.();
     };
 
     const askForSubcategory = (category: string, subcategories: string[]) => {
@@ -585,8 +664,8 @@ export default function ChatInterface(): JSX.Element {
                 setQuickReplies([]);
                 setAwaitingInput(null);
 
-                if (updatedParsing.amount && updatedParsing.category && updatedParsing.subcategory && updatedParsing.date) {
-                    saveExpense(updatedParsing);
+                if (updatedParsing.amount && updatedParsing.category && updatedParsing.subcategory && updatedParsing.date && updatedParsing.note) {
+                    saveExpense(updatedParsing as ParsedExpense);
                 } else {
                     generateFollowUpQuestions(updatedParsing);
                 }
@@ -602,8 +681,8 @@ export default function ChatInterface(): JSX.Element {
                     setQuickReplies([]);
                     setAwaitingInput(null);
 
-                    if (updatedParsing.amount && updatedParsing.category && updatedParsing.subcategory && updatedParsing.date) {
-                        saveExpense(updatedParsing);
+                    if (updatedParsing.amount && updatedParsing.category && updatedParsing.subcategory && updatedParsing.date && updatedParsing.note) {
+                        saveExpense(updatedParsing as ParsedExpense);
                     } else {
                         generateFollowUpQuestions(updatedParsing);
                     }
@@ -616,156 +695,367 @@ export default function ChatInterface(): JSX.Element {
     };
 
     const handleFollowUpInput = async (input: string) => {
-        if (awaitingInput === 'amount') {
-            const amountMatch = input.match(/(\d+(?:[.,]\d{1,2})?)/);
-            if (amountMatch) {
-                const amount = parseFloat(amountMatch[1].replace(',', '.'));
-                setCurrentParsing(prev => ({ ...prev, amount }));
+        if (!awaitingInput || !currentParsing) return;
 
-                if (currentParsing?.date && currentParsing?.category && currentParsing?.subcategory) {
-                    saveExpense({ ...currentParsing, amount });
+        const updatedParsing = { ...currentParsing };
+        let handled = true;
+
+        switch (awaitingInput) {
+            case 'amount':
+                const amountMatch = input.match(/(\d+(?:[.,]\d{1,2})?)/);
+                if (amountMatch?.[1]) {
+                    updatedParsing.amount = parseFloat(amountMatch[1].replace(',', '.'));
+                    addMessage(`Got it! I've updated the amount to ${updatedParsing.amount} RON.`, false);
                 } else {
-                    const nextQuestion = generateFollowUpQuestions({ ...currentParsing, amount, confidence: 0 });
-                    if (!nextQuestion) {
-                        addMessage('Mulțumesc! Mai am nevoie de câteva detalii.', false);
-                    }
+                    addMessage("I didn't understand the amount. Please try again with a number.", false);
+                    handled = false;
                 }
-            } else {
-                addMessage('Nu am putut identifica suma. Te rog să specifici un număr (ex: 50, 25.5)', false);
-                speakText('Nu am putut identifica suma. Te rog să specifici un număr.');
-            }
-        } else if (awaitingInput === 'date') {
-            const parsedDateInput = await parseExpenseFromText(input);
-            if (parsedDateInput.date) {
-                setCurrentParsing(prev => ({ ...prev, date: parsedDateInput.date }));
-                setAwaitingInput(null);
-                setQuickReplies([]);
+                break;
 
-                if (currentParsing?.amount && currentParsing?.category && currentParsing?.subcategory) {
-                    saveExpense({ ...currentParsing, date: parsedDateInput.date });
+            case 'date':
+                const date = parseRelativeDate(input);
+                if (date) {
+                    updatedParsing.date = date;
                 } else {
-                    const nextQuestion = generateFollowUpQuestions({ ...currentParsing, date: parsedDateInput.date, confidence: 0 });
-                    if (!nextQuestion) {
-                        addMessage('Mulțumesc! Mai am nevoie de câteva detalii.', false);
-                    }
+                    addMessage("I didn't understand the date. Please try again.", false);
+                    handled = false;
                 }
-            } else {
-                addMessage('Nu am putut înțelege data. Te rog să specifici când a avut loc cheltuiala (ex: "azi", "ieri", "acum 3 zile", "15/12/2024")', false);
-                speakText('Nu am putut înțelege data. Te rog să specifici când a avut loc cheltuiala.');
-            }
-        } else if (awaitingInput === 'category') {
-            const inputLower = input.toLowerCase();
-            const matchedCategory = categories.find(cat =>
-                cat.label.toLowerCase().includes(inputLower) ||
-                cat.subcategories.some(sub => sub.toLowerCase().includes(inputLower))
-            );
+                break;
 
-            if (matchedCategory) {
-                setCurrentParsing(prev => ({ ...prev, category: matchedCategory.label }));
-                askForSubcategory(matchedCategory.label, matchedCategory.subcategories);
-            } else {
-                addMessage('Nu am recunoscut categoria. Te rog să alegi din opțiunile de mai jos:', false);
-                const replies: QuickReply[] = categories.map(cat => ({
-                    text: cat.label,
-                    action: () => {
-                        setCurrentParsing(prev => ({ ...prev, category: cat.label }));
-                        askForSubcategory(cat.label, cat.subcategories);
-                    }
-                }));
-                setQuickReplies(replies);
-                speakText('Nu am recunoscut categoria. Te rog să alegi din opțiunile afișate.');
-            }
-        } else if (awaitingInput === 'subcategory') {
-            const inputLower = input.toLowerCase();
-            const currentCategory = categories.find(c => c.label === currentParsing?.category);
-
-            if (currentCategory) {
-                const matchedSub = currentCategory.subcategories.find(sub =>
-                    sub.toLowerCase().includes(inputLower)
+            case 'category':
+                const matchedCategory = categories.find(cat =>
+                    cat.label.toLowerCase().includes(input.toLowerCase()) ||
+                    cat.subcategories.some(sub => sub.toLowerCase().includes(input.toLowerCase()))
                 );
 
-                if (matchedSub) {
-                    setCurrentParsing(prev => ({ ...prev, subcategory: matchedSub }));
-                    setAwaitingInput(null);
-                    setQuickReplies([]);
-
-                    if (currentParsing?.amount) {
-                        saveExpense({ ...currentParsing, subcategory: matchedSub });
-                    } else {
-                        addMessage('Perfect! Acum, cât ai cheltuit?', false);
-                        setAwaitingInput('amount');
-                    }
+                if (matchedCategory) {
+                    updatedParsing.category = matchedCategory.label;
+                    askForSubcategory(matchedCategory.label, matchedCategory.subcategories);
                 } else {
-                    addMessage('Nu am recunoscut subcategoria. Te rog să alegi din opțiunile de mai jos:', false);
-                    if (currentParsing?.category) {
-                        askForSubcategory(currentParsing.category!, currentCategory.subcategories);
+                    addMessage('Nu am recunoscut categoria. Te rog să alegi din opțiunile de mai jos:', false);
+                    const replies = categories.map(cat => ({
+                        text: cat.label,
+                        action: () => {
+                            updatedParsing.category = cat.label;
+                            askForSubcategory(cat.label, cat.subcategories);
+                        }
+                    }));
+                    setQuickReplies(replies);
+                    speakText('Nu am recunoscut categoria. Te rog să alegi din opțiunile afișate.');
+                }
+                break;
+
+            case 'subcategory':
+                const category = categories.find(c => c.label === currentParsing?.category);
+                if (category) {
+                    const matchedSubcategory = category.subcategories.find(sub =>
+                        sub.toLowerCase().includes(input.toLowerCase())
+                    );
+
+                    if (matchedSubcategory) {
+                        updatedParsing.subcategory = matchedSubcategory;
+                    } else {
+                        addMessage('Nu am recunoscut subcategoria. Te rog să alegi din opțiunile de mai jos:', false);
+                        const replies = category.subcategories.map(sub => ({
+                            text: sub,
+                            action: () => {
+                                updatedParsing.subcategory = sub;
+                            }
+                        }));
+                        setQuickReplies(replies);
                         speakText('Nu am recunoscut subcategoria. Te rog să alegi din opțiunile afișate.');
                     }
                 }
-            }
+                break;
+        }
+
+        if (handled) {
+            setCurrentParsing(updatedParsing);
+            setAwaitingInput(null);
+            
+            // Show updated expense details with proper template string
+            addMessage(
+                `Here's the updated expense:\n` +
+                `Amount: ${updatedParsing.amount} RON\n` +
+                `Category: ${updatedParsing.category}\n` +
+                `Subcategory: ${updatedParsing.subcategory}\n` +
+                `Date: ${updatedParsing.date}\n\n` +
+                `Is this correct now?`,
+                false
+            );
+
+            setQuickReplies([
+                {
+                    text: 'Yes, save it',
+                    action: () => {
+                        if (isValidExpense(updatedParsing)) {
+                            confirmAndSaveExpense(updatedParsing as ParsedExpense);
+                        } else {
+                            addMessage("Some information is still missing. Please provide all required details.", false);
+                        }
+                    }
+                },
+                {
+                    text: 'No, needs more changes',
+                    action: () => {
+                        if (isValidExpense(updatedParsing)) {
+                            handleExpenseCorrection(updatedParsing as ParsedExpense);
+                        } else {
+                            generateFollowUpQuestions(updatedParsing);
+                        }
+                    }
+                }
+            ]);
         }
     };
 
-    const saveExpense = async (expense: Partial<ParsedExpense>) => {
-        if (!expense.amount || !expense.category || !expense.date) {
-            addMessage('Îmi pare rău, nu am toate informațiile necesare pentru a salva cheltuiala (sumă, categorie și dată).', false);
-            speakText('Nu am toate informațiile necesare pentru a salva cheltuiala.');
-            return;
+    const isValidExpense = (expense: Partial<ParsedExpense>): expense is ParsedExpense => {
+        console.log('🔍 Validating expense:', JSON.stringify(expense, null, 2));
+        
+        const validations = {
+            amount: typeof expense.amount === 'number' && expense.amount > 0 && !isNaN(expense.amount),
+            category: typeof expense.category === 'string' && expense.category.length > 0,
+            subcategory: typeof expense.subcategory === 'string' && expense.subcategory.length > 0,
+            date: typeof expense.date === 'string' && (
+                /^\d{4}-\d{2}-\d{2}$/.test(expense.date) || // YYYY-MM-DD
+                /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(expense.date) // ISO string
+            ),
+            note: typeof expense.note === 'string' && expense.note.length > 0
+        };
+
+        // Additional validation for amount
+        if (validations.amount && expense.amount! > 1000000) {
+            console.log('❌ Amount exceeds reasonable limit');
+            validations.amount = false;
         }
 
-        const user = auth.currentUser;
-        if (!user) {
-            addMessage('Trebuie să fii autentificat pentru a salva cheltuieli.', false);
-            speakText('Trebuie să fii autentificat pentru a salva cheltuieli.');
+        // Additional validation for date
+        if (validations.date) {
+            const expenseDate = new Date(expense.date!);
+            const now = new Date();
+            const oneYearAgo = new Date();
+            oneYearAgo.setFullYear(now.getFullYear() - 1);
+            
+            if (expenseDate > now || expenseDate < oneYearAgo) {
+                console.log('❌ Date is outside reasonable range');
+                validations.date = false;
+            }
+        }
+
+        // Additional validation for category
+        if (validations.category && validations.subcategory) {
+            const categoryExists = categories.some(cat => 
+                cat.label === expense.category && 
+                cat.subcategories.includes(expense.subcategory!)
+            );
+            if (!categoryExists) {
+                console.log('❌ Invalid category/subcategory combination');
+                validations.category = false;
+                validations.subcategory = false;
+            }
+        }
+
+        console.log('✅ Validation results:', validations);
+
+        const isValid = Object.values(validations).every(v => v);
+        
+        if (!isValid) {
+            console.log('❌ Invalid expense. Missing or invalid fields:', 
+                Object.entries(validations)
+                    .filter(([_, valid]) => !valid)
+                    .map(([field]) => field)
+            );
+        } else {
+            console.log('✅ Expense is valid');
+        }
+
+        return isValid;
+    };
+
+    const saveExpense = async (expense: ParsedExpense) => {
+        console.log('🔄 Attempting to save expense:', JSON.stringify(expense, null, 2));
+        if (!isValidExpense(expense)) {
+            console.error('❌ Invalid expense data:', JSON.stringify(expense, null, 2));
+            addMessage('Sorry, the expense data is incomplete. Please try again.', false);
             return;
         }
 
         try {
-            let dateString = expense.date || new Date().toISOString().split('T')[0];
-
-            if (dateString.includes('T')) {
-                dateString = dateString.split('T')[0];
+            setIsProcessing(true);
+            const user = auth.currentUser;
+            if (!user) {
+                console.error('❌ No authenticated user found');
+                throw new Error('User not authenticated');
             }
 
-            const expenseDate = new Date(dateString + 'T12:00:00.000Z');
+            // Ensure date is in YYYY-MM-DD format
+            const formattedDate = expense.date.includes('T') 
+                ? expense.date.split('T')[0] 
+                : expense.date;
 
+            // Handle note - if it's a store name use it, otherwise use subcategory
+            const note = expense.note && expense.note !== expense.subcategory 
+                ? expense.note  // Use note if it's a store name
+                : expense.subcategory;  // Default to subcategory if no store name
+
+            // Add to Firestore with caching
             const expenseData = {
+                ...expense,
+                date: formattedDate,
+                note: note,
+                timestamp: new Date(),
                 userId: user.uid,
-                amount: expense.amount,
-                category: expense.category,
-                subcategory: expense.subcategory || 'General',
-                note: expense.note || `${expense.category} - ${expense.subcategory || 'General'}`,
-                date: expenseDate.toISOString(),
-                createdAt: new Date().toISOString(),
                 currency: 'RON',
-                source: 'ai_assistant'
+                source: 'ai-chat'
             };
+            console.log('📝 Saving expense data:', JSON.stringify(expenseData, null, 2));
+            
+            // Try direct Firestore first, then fall back to cached version if offline
+            try {
+                const docRef = await addDoc(collection(db, 'expenses'), expenseData);
+                console.log('✅ Expense saved successfully with ID:', docRef.id);
+                console.log('💾 Final saved expense:', JSON.stringify({ id: docRef.id, ...expenseData }, null, 2));
+            } catch (firestoreError) {
+                console.warn('⚠️ Direct Firestore save failed, trying cached version:', firestoreError);
+                const docRef = await addDocWithCache('expenses', expenseData);
+                console.log('✅ Expense saved to cache with ID:', docRef.id);
+            }
 
-            await addDoc(collection(db, 'expenses'), expenseData);
+            const successMessage = userLanguage === 'ro'
+                ? `Perfect! Am salvat cheltuiala de ${expense.amount} lei pentru ${expense.category}.`
+                : `Great! I've saved your expense of ${expense.amount} RON for ${expense.category}.`;
 
-            const displayDate = expense.date === new Date().toISOString().split('T')[0] ?
-                (userLanguage === 'ro' ? 'azi' : 'today') :
-                new Date(dateString).toLocaleDateString(userLanguage === 'ro' ? 'ro-RO' : 'en-US');
-
-            const confirmationMessage = getLocalizedText('expenseSaved')
-                .replace('{amount}', expense.amount.toString())
-                .replace('{category}', expense.category)
-                .replace('{subcategory}', expense.subcategory || 'General')
-                .replace('{date}', displayDate);
-
-            addMessage(confirmationMessage, false);
-            speakText(getLocalizedText('expenseSavedVoice'));
-
+            addMessage(successMessage, false);
+            speakText(userLanguage === 'ro' ? 'Cheltuiala a fost salvată cu succes!' : 'Expense saved successfully!');
+            setQuickReplies([]);
             setCurrentParsing(null);
             setAwaitingInput(null);
-            setQuickReplies([]);
-
-            console.log('💾 Expense saved successfully:', expenseData);
         } catch (error) {
-            console.error('Error saving expense:', error);
-            addMessage('A apărut o eroare la salvarea cheltuielii. Te rog să încerci din nou.', false);
-            speakText('A apărut o eroare la salvarea cheltuielii.');
+            console.error('❌ Error saving expense:', error);
+            console.error('❌ Error details:', error instanceof Error ? error.message : 'Unknown error');
+            console.error('❌ Failed expense data:', JSON.stringify(expense, null, 2));
+            
+            const errorMessage = userLanguage === 'ro'
+                ? 'A apărut o eroare la salvarea cheltuielii. Te rog să încerci din nou.'
+                : 'Sorry, there was an error saving your expense. Please try again.';
+            
+            addMessage(errorMessage, false);
+        } finally {
+            setIsProcessing(false);
         }
+    };
+
+    const handleCorrection = async (text: string) => {
+        if (!correctionState) {
+            addMessage("I'm not sure what you want to correct. Please try scanning the receipt again.", false);
+            return;
+        }
+
+        const { originalExpense, correctedFields } = correctionState;
+        let updatedExpense = { ...originalExpense };
+
+        // Handle amount corrections
+        const amountMatch = text.match(/(\d+(\.\d+)?)/);
+        if (amountMatch?.[1] && (text.toLowerCase().includes('amount') || text.toLowerCase().includes('total') || text.toLowerCase().includes('lei') || text.toLowerCase().includes('ron'))) {
+            updatedExpense.amount = parseFloat(amountMatch[1]);
+            correctedFields.add('amount');
+        }
+
+        // Handle date corrections
+        if (text.toLowerCase().includes('date') || text.toLowerCase().includes('today') || text.toLowerCase().includes('yesterday')) {
+            if (text.toLowerCase().includes('today')) {
+                updatedExpense.date = new Date().toISOString().split('T')[0];
+            } else if (text.toLowerCase().includes('yesterday')) {
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                updatedExpense.date = yesterday.toISOString().split('T')[0];
+            }
+            correctedFields.add('date');
+        }
+
+        // Handle category corrections
+        const categoryMatch = categories.find(cat => 
+            text.toLowerCase().includes(cat.label.toLowerCase()) ||
+            cat.subcategories.some(sub => text.toLowerCase().includes(sub.toLowerCase()))
+        );
+
+        if (categoryMatch) {
+            updatedExpense.category = categoryMatch.label;
+            // Find matching subcategory if mentioned
+            const subcategoryMatch = categoryMatch.subcategories.find(sub =>
+                text.toLowerCase().includes(sub.toLowerCase())
+            );
+            if (subcategoryMatch) {
+                updatedExpense.subcategory = subcategoryMatch;
+            }
+            correctedFields.add('category');
+        }
+
+        // Update the correction state
+        setCorrectionState({
+            originalExpense: updatedExpense,
+            correctedFields
+        });
+
+        // If all necessary corrections are made, save the expense
+        if (isValidExpense(updatedExpense)) {
+            addMessage("I've updated the expense with your corrections. Would you like to save it now?", false);
+            setQuickReplies([
+                {
+                    text: 'Yes, save it',
+                    action: () => {
+                        saveExpense(updatedExpense);
+                        setCorrectionState(null);
+                    }
+                },
+                {
+                    text: 'No, more corrections needed',
+                    action: () => {
+                        addMessage("What else needs to be corrected?", false);
+                    }
+                }
+            ]);
+        } else {
+            addMessage("I've noted your correction. What else needs to be fixed?", false);
+        }
+    };
+
+    const formatDate = (dateStr: string): string => {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+    };
+
+    const parseAbsoluteDate = (text: string): string | null => {
+        // Try different date formats
+        const formats = [
+            /(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})/, // DD/MM/YYYY
+            /(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})/, // YYYY/MM/DD
+        ];
+
+        for (const format of formats) {
+            const match = text.match(format);
+            if (match) {
+                let year = parseInt(match[3]);
+                const month = parseInt(match[2]);
+                const day = parseInt(match[1]);
+
+                // Handle 2-digit years
+                if (year < 100) {
+                    year += 2000;
+                }
+
+                const date = new Date(year, month - 1, day);
+                if (!isNaN(date.getTime())) {
+                    return date.toISOString().split('T')[0];
+                }
+            }
+        }
+
+        return null;
     };
 
     const handleSendMessage = async (messageText?: string) => {
@@ -774,29 +1064,59 @@ export default function ChatInterface(): JSX.Element {
 
         setIsProcessing(true);
 
-        // Detect and set user language based on input
-        const detectedLang = await detectLanguage(textToSend);
-        setUserLanguage(detectedLang);
-
-        addMessage(textToSend, true);
-        setInputText('');
-        setQuickReplies([]);
-
         try {
+            // Detect and set user language based on input
+            const detectedLang = await detectLanguage(textToSend);
+            setUserLanguage(detectedLang);
+
+            addMessage(textToSend, true);
+            setInputText('');
+            setQuickReplies([]);
+
+            // Regular message handling
             if (awaitingInput) {
                 await handleFollowUpInput(textToSend);
             } else {
                 const parsed = await parseExpenseFromText(textToSend);
-                setCurrentParsing(parsed);
+                const parsedWithNote = {
+                    ...parsed,
+                    note: textToSend
+                };
+                setCurrentParsing(parsedWithNote);
 
-                if (parsed.amount && parsed.category && parsed.subcategory && parsed.date) {
-                    saveExpense(parsed);
+                if (parsed.amount && parsed.category && parsed.subcategory) {
+                    // If we have the main expense details, ask for confirmation
+                    const date = parsed.date || new Date().toISOString().split('T')[0];
+                    const expenseToConfirm: ParsedExpense = {
+                        amount: parsed.amount,
+                        category: parsed.category,
+                        subcategory: parsed.subcategory,
+                        date: date,
+                        note: textToSend
+                    };
+                    
+                    addMessage(
+                        `I found these expense details:\n` +
+                        `Amount: ${expenseToConfirm.amount} RON\n` +
+                        `Category: ${expenseToConfirm.category}\n` +
+                        `Subcategory: ${expenseToConfirm.subcategory}\n` +
+                        `Date: ${expenseToConfirm.date}\n\n` +
+                        `Is this correct?`,
+                        false
+                    );
+
+                    setQuickReplies([
+                        {
+                            text: 'Yes, save it',
+                            action: () => confirmAndSaveExpense(expenseToConfirm)
+                        },
+                        {
+                            text: 'No, needs changes',
+                            action: () => handleExpenseCorrection(expenseToConfirm)
+                        }
+                    ]);
                 } else {
-                    if (!generateFollowUpQuestions(parsed)) {
-                        const errorMessage = getLocalizedText('couldNotUnderstand');
-                        addMessage(errorMessage, false);
-                        speakText(errorMessage);
-                    }
+                    generateFollowUpQuestions(parsedWithNote);
                 }
             }
         } catch (error) {
@@ -813,14 +1133,79 @@ export default function ChatInterface(): JSX.Element {
         reply.action();
     };
 
+    const handleOCRNavigation = useCallback(() => {
+        router.push('/tabs/ai/chatbox/ocr');
+    }, [router]);
+
+    const confirmAndSaveExpense = async (expense: ParsedExpense) => {
+        try {
+            setIsProcessing(true);
+            const user = auth.currentUser;
+            if (!user) {
+                throw new Error('User not authenticated');
+            }
+
+            await addDocWithCache('expenses', {
+                ...expense,
+                timestamp: new Date(),
+                userId: user.uid
+            });
+
+            addMessage("Perfect! I've saved your expense.", false);
+            setPendingExpense(null);
+            setQuickReplies([]);
+        } catch (error) {
+            console.error('Error saving expense:', error);
+            addMessage('Sorry, there was an error saving the expense. Please try again.', false);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleExpenseCorrection = (expense: ParsedExpense) => {
+        addMessage("What needs to be corrected? You can tell me what's wrong or choose from these options:", false);
+        
+        setQuickReplies([
+            {
+                text: 'Change amount',
+                action: () => {
+                    addMessage("What's the correct amount?", false);
+                    setAwaitingInput('amount');
+                }
+            },
+            {
+                text: 'Change category',
+                action: () => {
+                    addMessage('Please select the correct category:', false);
+                    setQuickReplies(categories.map(cat => ({
+                        text: cat.label,
+                        action: () => {
+                            const updatedExpense = { ...expense, category: cat.label };
+                            setPendingExpense(updatedExpense);
+                            askForSubcategory(cat.label, cat.subcategories);
+                        }
+                    })));
+                }
+            },
+            {
+                text: 'Change date',
+                action: () => {
+                    addMessage("What's the correct date? You can say 'today', 'yesterday', or specify a date.", false);
+                    setAwaitingInput('date');
+                }
+            }
+        ]);
+    };
+
     return (
         <ImageBackground source={bg} style={styles.container} resizeMode="cover">
-            {/* Language Support Banner */}
-            <View style={styles.languageBanner}>
-                <Text style={styles.languageBannerText}>
-                    Supports English and Romanian 🇬🇧🇷🇴
-                </Text>
-            </View>
+            <TouchableOpacity
+                style={styles.ocrButton}
+                onPress={handleOCRNavigation}
+            >
+                <Ionicons name="receipt-outline" size={24} color="#91483C" />
+                <Text style={styles.ocrButtonText}>Upload Receipt</Text>
+            </TouchableOpacity>
 
             <ScrollView
                 ref={scrollViewRef}
@@ -885,7 +1270,6 @@ export default function ChatInterface(): JSX.Element {
                     multiline
                     onSubmitEditing={() => handleSendMessage()}
                 />
-
                 <TouchableOpacity
                     style={[
                         styles.voiceButton,
@@ -900,7 +1284,6 @@ export default function ChatInterface(): JSX.Element {
                         color={!checkSpeechRecognitionSupport() ? "#ccc" : (isListening ? "#FF4444" : "#91483C")}
                     />
                 </TouchableOpacity>
-
                 <TouchableOpacity
                     style={styles.sendButton}
                     onPress={() => handleSendMessage()}
@@ -918,18 +1301,23 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#fefaf6',
     },
-    languageBanner: {
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        paddingVertical: 8,
-        paddingHorizontal: 16,
+    ocrButton: {
+        flexDirection: 'row',
         alignItems: 'center',
-        borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
+        backgroundColor: '#fff0e8',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 20,
+        margin: 16,
+        borderWidth: 1,
+        borderColor: '#91483C',
+        alignSelf: 'flex-start',
     },
-    languageBannerText: {
-        fontSize: 14,
+    ocrButtonText: {
         color: '#91483C',
+        fontSize: 16,
         fontWeight: '500',
+        marginLeft: 8,
     },
     messagesContainer: {
         flex: 1,
@@ -1001,10 +1389,8 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     inputContainer: {
-        flexDirection: 'row',
         padding: 16,
         backgroundColor: 'white',
-        alignItems: 'flex-end',
         borderTopWidth: 1,
         borderTopColor: '#f0f0f0',
     },
@@ -1014,25 +1400,30 @@ const styles = StyleSheet.create({
         borderColor: '#ddd',
         borderRadius: 20,
         paddingHorizontal: 16,
-        paddingVertical: 10,
+        paddingVertical: 12,
         fontSize: 16,
         maxHeight: 100,
-        marginRight: 8,
+        marginBottom: 8,
     },
     voiceButton: {
+        position: 'absolute',
+        right: 76,
+        bottom: 24,
         width: 44,
         height: 44,
         borderRadius: 22,
         backgroundColor: '#fff0e8',
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 8,
     },
     voiceButtonDisabled: {
         backgroundColor: '#f5f5f5',
         opacity: 0.6,
     },
     sendButton: {
+        position: 'absolute',
+        right: 24,
+        bottom: 24,
         width: 44,
         height: 44,
         borderRadius: 22,

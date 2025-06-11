@@ -4,9 +4,21 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 require('dotenv').config();
+const multer = require('multer');
+const FormData = require('form-data');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
-app.use(cors());
+
+// Configure CORS
+app.use(cors({
+    origin: ['http://localhost:8081', 'http://localhost:19006'],
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+}));
+
 app.use(express.json());
 
 const GOCARDLESS_URL = 'https://bankaccountdata.gocardless.com/api/v2';
@@ -96,13 +108,17 @@ app.post('/api/connect-gocardless', async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 5000;
+// Configure multer for memory storage
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit
+    }
+});
 
 // ///////////////////////////////
 // Poza Avatar AI
 // ///////////////////////////////
-const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage() });
 const { createCanvas, loadImage } = require('canvas'); // npm install canvas
 
 app.post('/api/generate-avatar', upload.single('image'), async (req, res) => {
@@ -146,8 +162,91 @@ app.post('/api/generate-avatar', upload.single('image'), async (req, res) => {
     }
 });
 
+// OCR proxy endpoint with improved error handling
+app.post('/api/ocr', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
 
+        // Validate file type
+        const allowedTypes = ['image/jpeg', 'image/png'];
+        if (!allowedTypes.includes(req.file.mimetype)) {
+            return res.status(400).json({ 
+                error: 'Invalid file type. Please upload a JPEG or PNG image.' 
+            });
+        }
 
-app.listen(PORT, () => {
+        // Create form data for Asprise API
+        const formData = new FormData();
+        formData.append('api_key', 'TEST'); // Replace with your API key in production
+        formData.append('recognizer', 'auto');
+        formData.append('ref_no', 'ocr_proxy_' + Date.now());
+        
+        // Use the buffer directly
+        formData.append('file', req.file.buffer, {
+            filename: req.file.originalname || 'receipt.jpg',
+            contentType: req.file.mimetype
+        });
+
+        // Forward to Asprise API with timeout
+        const response = await axios.post(
+            'https://ocr.asprise.com/api/v1/receipt',
+            formData,
+            {
+                headers: {
+                    ...formData.getHeaders()
+                },
+                timeout: 30000 // 30 second timeout
+            }
+        );
+
+        // Validate response data
+        if (!response.data || !response.data.receipts) {
+            throw new Error('Invalid response from OCR service');
+        }
+
+        res.json(response.data);
+    } catch (error) {
+        console.error('OCR proxy error:', error);
+        
+        // Send appropriate error response
+        if (error.code === 'ECONNABORTED') {
+            res.status(504).json({
+                error: 'OCR service timeout',
+                details: 'The request took too long to process'
+            });
+        } else if (error.response) {
+            res.status(error.response.status || 500).json({
+                error: 'OCR service error',
+                details: error.response.data || error.message
+            });
+        } else {
+            res.status(500).json({
+                error: 'Internal server error',
+                details: error.message
+            });
+        }
+    }
+});
+
+const PORT = process.env.PORT || 5000;
+
+// Keep the server alive
+const server = app.listen(PORT, () => {
     console.log(`🚀 Server running at http://localhost:${PORT}`);
+});
+
+// Handle server errors
+server.on('error', (error) => {
+    console.error('Server error:', error);
+});
+
+// Handle process termination
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM. Performing graceful shutdown...');
+    server.close(() => {
+        console.log('Server closed. Exiting process.');
+        process.exit(0);
+    });
 });

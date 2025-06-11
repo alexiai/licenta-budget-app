@@ -4,10 +4,33 @@ import styles from '@styles/expensesStep';
 import bg from '@assets/bg/basicinfobackground.png';
 import expenseCategories from '@lib/categories';
 
-export default function ExpensesStep({ onNext, data, updateData }) {
-    const [selected, setSelected] = useState(data.categories || []);
+interface Category {
+    name: string;
+    subcategories: Array<{
+        name: string;
+        amount: string;
+    }>;
+}
 
-    const toggleCategory = (label) => {
+interface Income {
+    type: string;
+    amount: string;
+}
+
+interface ExpensesStepProps {
+    onNext: () => void;
+    onBack: () => void;
+    data: {
+        incomes: Income[];
+        categories: Category[];
+    };
+    updateData: (data: { categories: Category[] }) => void;
+}
+
+export default function ExpensesStep({ onNext, onBack, data, updateData }: ExpensesStepProps) {
+    const [selected, setSelected] = useState<Category[]>(data.categories || []);
+
+    const toggleCategory = (label: string) => {
         const exists = selected.find((cat) => cat.name === label);
         if (exists) {
             setSelected((prev) => prev.filter((cat) => cat.name !== label));
@@ -18,7 +41,7 @@ export default function ExpensesStep({ onNext, data, updateData }) {
         }
     };
 
-    const updateAmount = (catName, subName, value) => {
+    const updateAmount = (catName: string, subName: string, value: string) => {
         setSelected((prev) =>
             prev.map((cat) =>
                 cat.name === catName
@@ -110,13 +133,22 @@ export default function ExpensesStep({ onNext, data, updateData }) {
                         </View>
                     ))}
 
-                    <TouchableOpacity
-                        onPress={handleContinue}
-                        style={[styles.button, remaining < 0 && { backgroundColor: '#ccc' }]}
-                        disabled={remaining < 0}
-                    >
-                        <Text style={styles.buttonText}>Continue</Text>
-                    </TouchableOpacity>
+                    <View style={styles.buttonContainer}>
+                        <TouchableOpacity
+                            onPress={onBack}
+                            style={[styles.button, styles.backButton]}
+                        >
+                            <Text style={[styles.buttonText, styles.backButtonText]}>Back</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={handleContinue}
+                            style={[styles.button, remaining < 0 && { backgroundColor: '#ccc' }]}
+                            disabled={remaining < 0}
+                        >
+                            <Text style={styles.buttonText}>Continue</Text>
+                        </TouchableOpacity>
+                    </View>
                 </ScrollView>
             </KeyboardAvoidingView>
         </ImageBackground>
