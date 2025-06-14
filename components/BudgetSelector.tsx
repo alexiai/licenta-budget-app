@@ -7,11 +7,12 @@ import {
     TouchableOpacity,
     StyleSheet,
     TouchableWithoutFeedback,
-    Dimensions
+    Dimensions,
+    Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { useRouter } from 'expo-router';
 
@@ -19,38 +20,59 @@ type BudgetSelectorProps = {
     onBudgetChange?: (id: string | null) => void;
     onNewBudget?: () => void;
     selectedBudget?: string | null;
-    onCancel?: () => void;
 };
 
-export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBudget, onCancel }: BudgetSelectorProps) {
+interface Budget {
+    id: string;
+    name: string;
+    userId: string;
+}
+
+export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBudget }: BudgetSelectorProps) {
     const [modalVisible, setModalVisible] = useState(false);
-    const [budgets, setBudgets] = useState<any[]>([]);
+    const [budgets, setBudgets] = useState<Budget[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(selectedBudget || null);
     const selectedName = budgets.find((b) => b.id === selectedId)?.name ?? 'Select Budget';
     const router = useRouter();
 
+    const fetchBudgets = async () => {
+        try {
+            const user = auth.currentUser;
+            if (!user) return;
+            
+            const q = query(collection(db, 'budgets'), where('userId', '==', user.uid));
+            const snap = await getDocs(q);
+            const docs = snap.docs.map((doc) => ({ 
+                id: doc.id, 
+                ...doc.data() 
+            })) as Budget[];
+            
+            // Remove any duplicates by ID
+            const uniqueDocs = docs.filter((doc, index, self) => 
+                index === self.findIndex((d) => d.id === doc.id)
+            );
+            
+            setBudgets(uniqueDocs);
+        } catch (error) {
+            console.error('Error fetching budgets:', error);
+            Alert.alert('Error', 'Failed to fetch budgets. Please try again.');
+        }
+    };
+
     useEffect(() => {
-        const loadSelected = async () => {
+        fetchBudgets();
+    }, []);
+
+    useEffect(() => {
+        const loadStoredBudget = async () => {
             const stored = await AsyncStorage.getItem('selectedBudget');
             if (stored) {
                 setSelectedId(stored);
                 onBudgetChange?.(stored);
             }
         };
-        loadSelected();
+        loadStoredBudget();
     }, []);
-
-    useEffect(() => {
-        const fetchBudgets = async () => {
-            const user = auth.currentUser;
-            if (!user) return;
-            const q = query(collection(db, 'budgets'), where('userId', '==', user.uid));
-            const snap = await getDocs(q);
-            const docs = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-            setBudgets(docs);
-        };
-        fetchBudgets();
-    }, [modalVisible]);
 
     const handleSelect = async (id: string) => {
         setSelectedId(id);
@@ -59,15 +81,54 @@ export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBu
         onBudgetChange?.(id);
     };
 
-    const handleNewBudget = () => {
-        setModalVisible(false);
-        onNewBudget?.();
+    const handleDelete = async (budgetId: string) => {
+        Alert.alert(
+            "Delete Budget",
+            "Are you sure you want to delete this budget? This action cannot be undone.",
+            [
+                {
+                    text: "Cancel",
+                    style: "cancel"
+                },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            // Delete from Firestore
+                            await deleteDoc(doc(db, 'budgets', budgetId));
+                            
+                            // Update local state
+                            setBudgets(prev => prev.filter(b => b.id !== budgetId));
+                            
+                            // If the deleted budget was selected, clear the selection
+                            if (selectedId === budgetId) {
+                                setSelectedId(null);
+                                await AsyncStorage.removeItem('selectedBudget');
+                                onBudgetChange?.(null);
+                            }
+                            
+                            // Close the modal
+                            setModalVisible(false);
+                            
+                            Alert.alert('Success', 'Budget deleted successfully');
+                        } catch (error) {
+                            console.error('Error deleting budget:', error);
+                            Alert.alert('Error', 'Failed to delete budget. Please try again.');
+                        }
+                    }
+                }
+            ]
+        );
     };
 
-    const handleCancel = () => {
+    const handleNewBudget = () => {
         setModalVisible(false);
-        onCancel?.();
-        router.back();
+        if (onNewBudget) {
+            onNewBudget();
+        } else {
+            router.push('/tabs/budget/onboarding');
+        }
     };
 
     return (
@@ -102,35 +163,35 @@ export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBu
                         contentContainerStyle={{ paddingBottom: 10 }}
                         showsVerticalScrollIndicator={false}
                         renderItem={({ item }) => (
-                            <TouchableOpacity
-                                style={[styles.item, selectedId === item.id && styles.selectedItem]}
-                                onPress={() => handleSelect(item.id)}
-                            >
-                                <Text style={[styles.itemText, selectedId === item.id && styles.selectedItemText]}>
-                                    {item.name}
-                                </Text>
-                                {selectedId === item.id && (
-                                    <Ionicons name="checkmark-circle" size={24} color="#fff" />
-                                )}
-                            </TouchableOpacity>
+                            <View style={styles.itemContainer}>
+                                <TouchableOpacity
+                                    style={[styles.item, selectedId === item.id && styles.selectedItem]}
+                                    onPress={() => handleSelect(item.id)}
+                                >
+                                    <Text style={[styles.itemText, selectedId === item.id && styles.selectedItemText]}>
+                                        {item.name}
+                                    </Text>
+                                    {selectedId === item.id && (
+                                        <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                                    )}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.deleteButton}
+                                    onPress={() => handleDelete(item.id)}
+                                >
+                                    <Ionicons name="trash-outline" size={20} color="#ff4444" />
+                                </TouchableOpacity>
+                            </View>
                         )}
                     />
 
                     <View style={styles.buttonContainer}>
                         <TouchableOpacity
-                            style={styles.addButton}
+                            style={[styles.addButton, { flex: 1 }]}
                             onPress={handleNewBudget}
                         >
                             <Ionicons name="add-circle-outline" size={24} color="#91483C" />
                             <Text style={styles.addButtonText}>New Budget</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.cancelButton}
-                            onPress={handleCancel}
-                        >
-                            <Ionicons name="arrow-back-circle-outline" size={24} color="#666" />
-                            <Text style={styles.cancelButtonText}>Go Back</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -195,11 +256,16 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#91483C',
     },
+    itemContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
     item: {
+        flex: 1,
         padding: 16,
         backgroundColor: '#fff0e8',
         borderRadius: 12,
-        marginBottom: 10,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -239,21 +305,12 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginLeft: 8,
     },
-    cancelButton: {
-        flex: 1,
-        backgroundColor: '#f5f5f5',
+    deleteButton: {
         padding: 12,
+        marginLeft: 8,
+        backgroundColor: '#fff0e8',
         borderRadius: 12,
-        alignItems: 'center',
-        marginLeft: 8,
-        flexDirection: 'row',
-        justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#ddd',
-    },
-    cancelButtonText: {
-        color: '#666',
-        fontWeight: '600',
-        marginLeft: 8,
+        borderColor: '#ff4444',
     },
 });

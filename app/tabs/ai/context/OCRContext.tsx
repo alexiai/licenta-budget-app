@@ -53,4 +53,7 @@ export const OCRDataProvider = {
     getData() {
         return this._data;
     }
-}; 
+};
+
+// Default export for the context provider
+export default OCRProvider; 

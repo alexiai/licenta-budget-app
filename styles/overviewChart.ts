@@ -189,4 +189,12 @@ export default StyleSheet.create({
         fontWeight: '500',
         marginTop: 2,
     },
+    insightTitleContainer: {
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+    },
+    subcategoryContainer: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+    },
 });

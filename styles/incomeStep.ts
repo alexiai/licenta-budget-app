@@ -1,6 +1,10 @@
 import { StyleSheet } from 'react-native';
 
 export default StyleSheet.create({
+    wrapper: {
+        flex: 1,
+        width: '100%',
+    },
     container: {
         flex: 1,
         paddingHorizontal: 24,
@@ -11,70 +15,80 @@ export default StyleSheet.create({
         fontSize: 40,
         fontWeight: '900',
         color: '#6B3E26',
+        marginBottom: 20,
+        marginTop: 50,
         textAlign: 'center',
-        marginBottom: 30,
         fontFamily: 'Fredoka',
     },
     row: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
-        gap: 12,
-    },
-    label: {
-        fontSize: 25,
-        fontWeight: 'bold',
-        color: '#7C4F29',
-        width: 190, // sau cât simți că încap toate frumos
-        fontFamily: 'Fredoka',
-    },
-
-
-    icon: {
-        width: 32,
-        height: 32,
-        resizeMode: 'contain',
-        marginLeft:10
-    },
-    input: {
-        //flex: 1,
+        marginBottom: 16,
         backgroundColor: '#FFF',
+        padding: 16,
         borderRadius: 12,
-        paddingVertical: 12,
-        paddingHorizontal: 10,
-        fontSize: 18,
         borderWidth: 2,
         borderColor: '#F7C873',
-        color: '#2C2C2C',
+    },
+    icon: {
+        width: 24,
+        height: 24,
+        marginRight: 12,
+    },
+    label: {
+        flex: 1,
+        fontSize: 16,
+        color: '#5B3A1C',
         fontFamily: 'Fredoka',
-        width: 100, // sau 90, 80, ajustezi cât de mic vrei
-        marginLeft:50
-
-
+    },
+    input: {
+        backgroundColor: '#FFF3DC',
+        padding: 12,
+        borderRadius: 8,
+        width: 120,
+        textAlign: 'right',
+        fontSize: 16,
+        color: '#5B3A1C',
+        borderWidth: 1,
+        borderColor: '#F7C873',
+        fontFamily: 'Fredoka',
     },
     totalText: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
-        color: '#7C4F29',
-        textAlign: 'center',
-        marginVertical: 20,
+        color: '#5B3A1C',
+        textAlign: 'right',
+        marginTop: 16,
+        marginBottom: 24,
         fontFamily: 'Fredoka',
+    },
+    buttonContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 20,
+        gap: 10,
+        paddingHorizontal: 24,
     },
     button: {
-        marginTop: 10,
-        backgroundColor: '#FFA94D',
-        padding: 16,
-        borderRadius: 20,
+        backgroundColor: '#91483C',
+        padding: 15,
+        borderRadius: 12,
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOpacity: 0.15,
-        shadowOffset: { width: 0, height: 3 },
-        shadowRadius: 5,
+        justifyContent: 'center',
+        flex: 1,
+        height: 50,
+    },
+    backButton: {
+        backgroundColor: '#f5f5f5',
+        borderWidth: 1,
+        borderColor: '#91483C',
     },
     buttonText: {
-        color: '#FFF',
-        fontWeight: '800',
-        fontSize: 22,
-        fontFamily: 'Fredoka',
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    backButtonText: {
+        color: '#91483C',
     },
 });

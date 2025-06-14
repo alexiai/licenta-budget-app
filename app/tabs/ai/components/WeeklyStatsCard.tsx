@@ -234,21 +234,26 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
+    container: { 
+        flex: 1,
+        backgroundColor: '#FFF9E6',
+    },
     headerRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         paddingTop: 20,
         paddingBottom: 16,
         paddingHorizontal: 16,
+        marginLeft: -16,
     },
     image: {
-        width: 120,
-        height: 120,
+        width: 160,
+        height: 160,
         marginRight: 16,
         alignSelf: 'center',
+        marginLeft: -16,
     },
-    headerText: { 
+    headerText: {
         flex: 1,
         paddingTop: 8,
     },
@@ -277,7 +282,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Fredoka',
     },
     card: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'rgba(255, 243, 224, 0.9)',
         borderRadius: 16,
         padding: 16,
         marginBottom: 16,
@@ -286,6 +291,8 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
+        borderWidth: 1,
+        borderColor: '#FFE0B2',
     },
     cardTitle: {
         fontSize: 18,

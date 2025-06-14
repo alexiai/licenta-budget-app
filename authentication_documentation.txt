@@ -1,0 +1,216 @@
+# 5.2 Autentificare și Securitate în BunnyBudget
+
+## 1. Implementare Autentificare
+
+### 1.1 Metode de Autentificare
+- Email/parolă prin Firebase Auth
+- Implementare în `app/auth/login/index.tsx` și `app/auth/signup/index.tsx`
+- Flow personalizat cu UI modern
+
+### 1.2 Cod Implementare Login
+```typescript
+const handleLogin = async () => {
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+        const user = auth.currentUser;
+        
+        // Fetch user's budgets
+        const q = query(collection(db, 'budgets'), 
+                       where('userId', '==', user.uid));
+        const snap = await getDocs(q);
+
+        // Route based on budget existence
+        if (snap.empty) {
+            router.replace('/tabs/budget/onboarding');
+        } else {
+            await AsyncStorage.setItem('selectedBudget', snap.docs[0].id);
+            router.replace('/tabs/overview/list');
+        }
+    } catch (err: any) {
+        // Error handling
+        if (err.code === 'auth/user-not-found') 
+            setError('No account found.');
+        else if (err.code === 'auth/wrong-password') 
+            setError('Wrong password.');
+        else setError('Login failed. Try again.');
+    }
+};
+```
+
+### 1.3 Cod Implementare Signup
+```typescript
+const handleSignup = async () => {
+    // Validări
+    if (!validateEmail(email)) 
+        return setError('Invalid email.');
+    if (!validatePassword(password)) 
+        return setError('Password must be at least 8 characters...');
+
+    try {
+        const userCredential = await createUserWithEmailAndPassword(
+            auth, email, password
+        );
+
+        // Create user document
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+            name,
+            surname,
+            email,
+            createdAt: new Date().toISOString(),
+            notificationsEnabled: true
+        });
+    } catch (err: any) {
+        // Error handling
+    }
+};
+```
+
+## 2. Persistență și Sesiune
+
+### 2.1 Firebase Persistence
+- Persistență automată prin Firebase Auth
+- Token management automat
+- Refresh token handling
+
+### 2.2 Local Storage
+```typescript
+// Date salvate în AsyncStorage
+interface StoredData {
+    selectedBudget: string;    // ID-ul bugetului activ
+    userSettings: {           // Preferințe utilizator
+        notifications: boolean;
+        language: string;
+        theme: string;
+    };
+    lastSync: string;         // Timestamp ultima sincronizare
+}
+```
+
+### 2.3 Comportament la Repornire
+1. Verificare token Firebase
+2. Validare sesiune
+3. Restaurare preferințe
+4. Redirecționare către ultima rută
+
+## 3. Securitate și Control Acces
+
+### 3.1 Validări Firebase Rules
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // User data access
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+    }
+    
+    // Budgets access
+    match /budgets/{budgetId} {
+      allow read, write: if request.auth.uid == resource.data.userId;
+    }
+    
+    // Expenses access
+    match /expenses/{expenseId} {
+      allow read, write: if request.auth.uid == resource.data.userId;
+    }
+  }
+}
+```
+
+### 3.2 Validări Client
+```typescript
+// Validare email
+const validateEmail = (email: string) => 
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+// Validare parolă
+const validatePassword = (pass: string) => 
+    /^(?=.*[0-9])(?=.*[!@#$%^&*])[A-Za-z0-9!@#$%^&*]{8,}$/.test(pass);
+```
+
+## 4. Tratament Erori și Fallback
+
+### 4.1 Tipuri de Erori Gestionate
+1. Autentificare
+   - User inexistent
+   - Parolă greșită
+   - Email invalid
+   - Email deja folosit
+
+2. Rețea
+   - Lipsă conexiune
+   - Timeout
+   - Server error
+
+3. Validare
+   - Câmpuri lipsă
+   - Format invalid
+   - Restricții parolă
+
+### 4.2 Feedback Utilizator
+```typescript
+// Exemple mesaje error
+const errorMessages = {
+    'auth/user-not-found': 'No account found.',
+    'auth/wrong-password': 'Wrong password.',
+    'auth/email-already-in-use': 'Email already in use.',
+    'auth/weak-password': 'Password should be at least 6 characters.',
+    'network/offline': 'Check your internet connection.',
+};
+```
+
+## 5. Tabel Funcționalități Autentificare
+
+| Funcționalitate | Implementare | Fișiere/Servicii |
+|-----------------|--------------|------------------|
+| Login email/parolă | Firebase Auth | auth/login/index.tsx |
+| Signup | Firebase Auth + Firestore | auth/signup/index.tsx |
+| Persistență sesiune | AsyncStorage + Firebase | lib/firebase.ts |
+| Validări form | Regex + Firebase Rules | auth/utils/validation.ts |
+| Error handling | Custom messages + UI | components/ErrorDisplay.tsx |
+| Securitate date | Firebase Rules | firestore.rules |
+
+## 6. Screenshot-uri Recomandate
+
+### 6.1 Login Screen
+- Path: app/auth/login/index.tsx
+- Features:
+  - Design modern cu mascota Bunny
+  - Input-uri cu validare
+  - Toggle password visibility
+  - Error messages intuitive
+
+### 6.2 Signup Flow
+- Path: app/auth/signup/index.tsx
+- Features:
+  - Formular complet (nume, email, parolă)
+  - Validări în timp real
+  - Loading state
+  - Success feedback
+
+### 6.3 Error States
+- Exemple:
+  - Eroare login
+  - Validare email
+  - Offline state
+  - Loading states
+
+## 7. Considerații UX
+
+### 7.1 Feedback Vizual
+- Loading indicators
+- Error messages clare
+- Animații subtile
+- Iconițe intuitive
+
+### 7.2 Accesibilitate
+- Contrast text adecvat
+- Focus states clare
+- Error messages descriptive
+- Keyboard navigation support
+
+### 7.3 Securitate UX
+- Password visibility toggle
+- Logout confirmation
+- Session timeout warning
+- Automatic redirect to login 

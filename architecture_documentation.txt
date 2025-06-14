@@ -1,0 +1,253 @@
+# 5.1 Arhitectura Generală BunnyBudget
+
+## 1. Tehnologii și Stack
+
+### 1.1 Frontend Core
+- React Native (v0.76.8)
+- Expo SDK (v52.0.42)
+- TypeScript
+- expo-router pentru navigare
+
+### 1.2 State Management
+- React Context API pentru state global
+- Custom hooks pentru logică reutilizabilă
+- AsyncStorage pentru persistență locală
+
+### 1.3 Backend & Database
+- Firebase (v11.6.0)
+  - Authentication
+  - Firestore
+  - Cloud Functions
+- Custom Express server pentru OCR
+
+### 1.4 External APIs & Services
+- OCR API (custom Asprise implementation)
+- Text-to-Speech (expo-speech)
+- Voice Recognition (@react-native-voice/voice)
+- Charts (react-native-chart-kit)
+
+## 2. Structura Proiectului
+
+### 2.1 Organizare Fișiere
+```
+/
+├── app/                    # Main application code
+│   ├── auth/              # Authentication screens
+│   ├── tabs/              # Main tab screens
+│   ├── ai/                # AI & chatbot features
+│   ├── bank-connect/      # Banking integration
+│   └── services/          # Business logic
+├── components/            # Reusable UI components
+├── lib/                   # Core utilities
+├── hooks/                # Custom React hooks
+├── styles/               # Global styles
+├── constants/            # App constants
+└── assets/              # Images, fonts, etc.
+```
+
+### 2.2 Path Aliases
+```typescript
+// tsconfig.json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["*"],
+      "@components/*": ["app/components/*"],
+      "@services/*": ["app/services/*"],
+      "@styles/*": ["app/styles/*"],
+      "@lib/*": ["lib/*"]
+    }
+  }
+}
+```
+
+## 3. Module Core
+
+### 3.1 Tabel Module Principale
+
+| Modul | Responsabilitate Principală | Componente Cheie |
+|-------|---------------------------|------------------|
+| Auth | Autentificare, management sesiuni | auth/login/index.tsx, auth/signup/index.tsx |
+| Budget | Gestionare bugete și categorii | tabs/budget/index.tsx, BudgetService.ts |
+| Expenses | Managementul cheltuielilor | tabs/expenses/index.tsx, ExpenseService.ts |
+| AI | Chatbot, OCR, analiză | ai/chatbox/index.tsx, AIService.ts |
+| Voice | Asistent vocal | VoiceService.ts, SpeechRecognition.ts |
+| Analytics | Statistici și rapoarte | tabs/analytics/index.tsx, AnalyticsService.ts |
+| Bank | Integrare bancară | bank-connect/index.tsx, BankService.ts |
+
+### 3.2 Detalii Module
+
+#### Auth Module
+- Entry Point: app/auth/index.tsx
+- State: UserContext.tsx
+- Services: AuthService.ts
+- Key Features:
+  - Email/password auth
+  - Session management
+  - Profile settings
+
+#### AI Module
+- Entry Point: app/ai/chatbox/index.tsx
+- Components:
+  - OCR Scanner
+  - Chatbot Interface
+  - Voice Assistant
+- Services:
+  - AIService.ts
+  - OCRService.ts
+  - VoiceService.ts
+
+#### Budget Module
+- Entry Point: app/tabs/budget/index.tsx
+- Features:
+  - Budget creation/editing
+  - Category management
+  - Spending limits
+- Services: BudgetService.ts
+
+## 4. Data Flow
+
+### 4.1 State Management
+```typescript
+// Example of Context structure
+interface AppState {
+  user: User | null;
+  currentBudget: Budget | null;
+  expenses: Expense[];
+  settings: AppSettings;
+}
+
+// Context Provider
+export const AppProvider: React.FC = ({ children }) => {
+  // State implementations
+};
+```
+
+### 4.2 Firebase Integration
+```typescript
+// Firebase configuration
+const firebaseConfig = {
+  // Configuration
+};
+
+// Firestore Collections
+interface Collections {
+  users: Collection<User>;
+  budgets: Collection<Budget>;
+  expenses: Collection<Expense>;
+  categories: Collection<Category>;
+}
+```
+
+### 4.3 Real-time Updates
+```typescript
+// Example of Firebase listener
+const subscribeToExpenses = (budgetId: string) => {
+  return onSnapshot(
+    query(collection(db, 'expenses'), 
+    where('budgetId', '==', budgetId)),
+    (snapshot) => {
+      // Update local state
+    }
+  );
+};
+```
+
+## 5. Integrări Externe
+
+### 5.1 OCR Integration
+```typescript
+// OCR Service
+const processReceipt = async (image: ImageSource) => {
+  const formData = new FormData();
+  formData.append('file', {
+    uri: image.uri,
+    type: 'image/jpeg',
+    name: 'receipt.jpg'
+  });
+  
+  const response = await fetch('API_ENDPOINT', {
+    method: 'POST',
+    body: formData
+  });
+  
+  return await response.json();
+};
+```
+
+### 5.2 Voice Assistant
+```typescript
+// Voice recognition setup
+const initializeVoice = () => {
+  Voice.onSpeechResults = onSpeechResults;
+  Voice.onSpeechError = onSpeechError;
+};
+
+// Text-to-Speech
+const speakText = async (text: string) => {
+  await Speech.speak(text, {
+    language: 'ro-RO',
+    voice: 'ro-RO-IoanaNeural'
+  });
+};
+```
+
+## 6. Navigare și Routing
+
+### 6.1 Structură Route
+```typescript
+// app/_layout.tsx
+export default function RootLayout() {
+  return (
+    <Stack>
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="auth" options={{ headerShown: false }} />
+      <Stack.Screen name="ai" options={{ presentation: 'modal' }} />
+    </Stack>
+  );
+}
+```
+
+### 6.2 Tab Navigation
+```typescript
+// app/(tabs)/_layout.tsx
+export default function TabLayout() {
+  return (
+    <Tabs>
+      <Tabs.Screen name="overview" />
+      <Tabs.Screen name="expenses" />
+      <Tabs.Screen name="budget" />
+      <Tabs.Screen name="ai" />
+    </Tabs>
+  );
+}
+```
+
+## 7. Sugestii Screenshot-uri
+
+### 7.1 Ecrane Principale
+1. Welcome Screen (/app/welcome/index.tsx)
+   - Prima interacțiune cu aplicația
+   - Design modern cu mascota Bunny
+
+2. Dashboard (/app/tabs/overview/index.tsx)
+   - Vizualizare completă a bugetului
+   - Grafice și statistici
+
+3. AI Assistant (/app/ai/chatbox/index.tsx)
+   - Interfața chatbot
+   - Integrare OCR
+
+### 7.2 Features Distinctive
+1. OCR Scanner
+   - Procesul de scanare
+   - Rezultatul procesării
+
+2. Voice Assistant
+   - Interfața vocală
+   - Feedback vizual
+
+3. Analytics
+   - Grafice detaliate
+   - Rapoarte personalizate 

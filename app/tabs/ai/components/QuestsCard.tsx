@@ -5,22 +5,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import questsImg from '@assets/decor/aiQuests.png';
 import { auth } from '@lib/firebase';
 import QuestService from '../../../services/QuestService';
+import { UserQuest } from '@lib/types';
 
-interface Quest {
-    id: string;
-    title: string;
-    description: string;
-    type: 'daily' | 'weekly' | 'monthly' | 'achievement';
-    reward: number;
-    progress: number;
-    target: number;
-    status: 'active' | 'completed' | 'failed' | 'locked' | 'claimed';
-    category?: string;
-    endDate?: Date;
-    streak?: number;
-    level: number;
-    claimedAt?: Date;
-}
+// Add immediate logging to verify the module is loaded
+console.log('[QuestsCard] Module loaded, QuestService:', !!QuestService);
 
 interface QuestsCardProps {
     analysis: SpendingAnalysis | null;
@@ -28,150 +16,105 @@ interface QuestsCardProps {
 }
 
 export default function QuestsCard({ analysis, onQuestComplete }: QuestsCardProps): JSX.Element {
+    console.log('[QuestsCard] Component initializing');
+    
     const [expandedQuest, setExpandedQuest] = useState<string | null>(null);
-    const [claimedQuests, setClaimedQuests] = useState<string[]>([]);
+    const [quests, setQuests] = useState<UserQuest[]>([]);
+    const [loading, setLoading] = useState(true);
 
+    // Add initialization effect
     useEffect(() => {
-        loadClaimedQuests();
+        console.log('[QuestsCard] Initial mount effect');
+        return () => {
+            console.log('[QuestsCard] Component unmounting');
+        };
     }, []);
 
-    const loadClaimedQuests = async () => {
+    useEffect(() => {
+        console.log('[QuestsCard] Component mounted with analysis:', analysis);
+        console.log('[QuestsCard] Current auth user:', auth.currentUser?.uid);
+        loadQuests();
+    }, [analysis]);
+
+    const loadQuests = async () => {
+        console.log('[QuestsCard] Loading quests...');
         const user = auth.currentUser;
-        if (!user || !analysis) return;
+        
+        if (!user || !analysis) {
+            console.log('[QuestsCard] No user logged in or no analysis data');
+            console.log('[QuestsCard] User:', user?.uid);
+            console.log('[QuestsCard] Analysis:', !!analysis);
+            setLoading(false);
+            return;
+        }
 
         try {
-            const progress = await QuestService.getUserProgress(user.uid);
-            setClaimedQuests(progress.completedQuests || []);
-        } catch (error) {
-            console.error('Error loading claimed quests:', error);
-        }
-    };
-
-    if (!analysis) {
-        return (
-            <View style={styles.container}>
-                <View style={styles.headerRow}>
-                    <Image source={questsImg} style={styles.image} resizeMode="contain" />
-                    <View style={styles.headerText}>
-                        <Text style={styles.headerTitle}>Daily Quests</Text>
-                        <Text style={styles.headerSubtitle}>Loading your quests...</Text>
-                    </View>
-                </View>
-            </View>
-        );
-    }
-
-    const generateQuests = (): Quest[] => {
-        const quests: Quest[] = [];
-        const {
-            categoryBreakdown,
-            spendingPatterns,
-            averageDailySpending,
-            totalThisMonth
-        } = analysis;
-
-        // Daily Quests
-        quests.push({
-            id: 'daily-spending-limit',
-            title: 'Daily Budget Master',
-            description: `Keep today's spending under ${averageDailySpending.toFixed(0)} RON`,
-            type: 'daily',
-            reward: 50,
-            progress: spendingPatterns.todayTotal || 0,
-            target: averageDailySpending,
-            status: claimedQuests.includes('daily-spending-limit') ? 'claimed' : 'active',
-            level: 1
-        });
-
-        // Weekly Quests
-        if (spendingPatterns.weekdayVsWeekend.weekend > spendingPatterns.weekdayVsWeekend.weekday * 0.4) {
-            quests.push({
-                id: 'weekend-warrior',
-                title: 'Weekend Warrior',
-                description: 'Reduce weekend spending by finding free activities',
-                type: 'weekly',
-                reward: 100,
-                progress: spendingPatterns.weekdayVsWeekend.weekend,
-                target: spendingPatterns.weekdayVsWeekend.weekday * 0.4,
-                status: claimedQuests.includes('weekend-warrior') ? 'claimed' : 'active',
-                level: 2
+            console.log('[QuestsCard] Before generating quests');
+            console.log('[QuestsCard] QuestService available:', !!QuestService);
+            console.log('[QuestsCard] QuestService methods:', Object.keys(QuestService));
+            
+            const userQuests = await QuestService.generateQuests(user.uid, analysis);
+            console.log('[QuestsCard] Quests generated:', userQuests);
+            setQuests(userQuests);
+        } catch (err) {
+            const error = err as Error;
+            console.error('[QuestsCard] Error loading quests:', error);
+            console.error('[QuestsCard] Error details:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
             });
+            Alert.alert('Error', 'Failed to load quests. Please try again.');
+        } finally {
+            setLoading(false);
         }
-
-        // Monthly Quests
-        const essentialSpending = spendingPatterns.essentialVsFlexible.essential;
-        const flexibleSpending = spendingPatterns.essentialVsFlexible.flexible;
-        
-        if (flexibleSpending > essentialSpending * 0.6) {
-            quests.push({
-                id: 'flexible-spending',
-                title: 'Balance Master',
-                description: 'Keep flexible spending below 60% of essential spending',
-                type: 'monthly',
-                reward: 200,
-                progress: flexibleSpending,
-                target: essentialSpending * 0.6,
-                status: claimedQuests.includes('flexible-spending') ? 'claimed' : 'active',
-                level: 3
-            });
-        }
-
-        // Achievement Quests
-        Object.entries(categoryBreakdown).forEach(([category, amount]) => {
-            const questId = `category-${category}`;
-            if (amount > totalThisMonth * 0.3) {
-                quests.push({
-                    id: questId,
-                    title: `${category} Optimizer`,
-                    description: `Reduce ${category} spending to under 30% of total budget`,
-                    type: 'achievement',
-                    reward: 150,
-                    progress: amount,
-                    target: totalThisMonth * 0.3,
-                    status: claimedQuests.includes(questId) ? 'claimed' : 'active',
-                    category,
-                    level: 2
-                });
-            }
-        });
-
-        return quests.sort((a, b) => {
-            const typeOrder = { daily: 0, weekly: 1, monthly: 2, achievement: 3 };
-            return typeOrder[a.type] - typeOrder[b.type];
-        });
     };
 
     const handleQuestComplete = async (questId: string) => {
         const user = auth.currentUser;
+        console.log('[QuestsCard] Attempting to complete quest:', questId);
+        console.log('[QuestsCard] Current user:', user?.uid);
+
         if (!user) {
+            console.log('[QuestsCard] No user logged in');
             Alert.alert('Error', 'You must be logged in to complete quests.');
             return;
         }
 
         try {
-            // Check if already claimed
-            if (await QuestService.isQuestClaimed(user.uid, questId)) {
+            console.log('[QuestsCard] Checking if quest is already claimed...');
+            const isQuestClaimed = await QuestService.isQuestClaimed(user.uid, questId);
+            console.log('[QuestsCard] Quest claimed status:', isQuestClaimed);
+
+            if (isQuestClaimed) {
+                console.log('[QuestsCard] Quest already claimed');
                 Alert.alert('Already Claimed', 'You have already claimed this quest!');
                 return;
             }
 
             // Get the quest
-            const quest = generateQuests().find(q => q.id === questId);
-            if (!quest) return;
+            const quest = quests.find(q => q.id === questId);
+            console.log('[QuestsCard] Quest to complete:', quest);
+            if (!quest) {
+                console.log('[QuestsCard] Quest not found');
+                return;
+            }
 
-            // Update quest progress
-            await QuestService.updateQuestProgress(user.uid, questId, quest.progress);
-
-            // Update local state
-            setClaimedQuests(prev => [...prev, questId]);
+            console.log('[QuestsCard] Claiming quest reward...');
+            await QuestService.claimQuestReward(user.uid, questId);
+            console.log('[QuestsCard] Quest reward claimed successfully');
 
             // Call parent handler if provided
-            onQuestComplete?.(questId);
+            if (onQuestComplete) {
+                console.log('[QuestsCard] Calling parent completion handler');
+                onQuestComplete(questId);
+            }
 
-            // Refresh claimed quests
-            await loadClaimedQuests();
+            console.log('[QuestsCard] Refreshing quests...');
+            await loadQuests();
+            console.log('[QuestsCard] Quests refreshed successfully');
         } catch (error) {
-            console.error('Error completing quest:', error);
+            console.error('[QuestsCard] Error completing quest:', error);
             Alert.alert('Error', 'Failed to complete quest. Please try again.');
         }
     };
@@ -189,18 +132,30 @@ export default function QuestsCard({ analysis, onQuestComplete }: QuestsCardProp
         }
     };
 
-    const getProgressPercentage = (quest: Quest) => {
+    const getProgressPercentage = (quest: UserQuest) => {
         return Math.min(100, (quest.progress / quest.target) * 100);
     };
 
-    const getQuestStatus = (quest: Quest) => {
+    const getQuestStatus = (quest: UserQuest) => {
         if (quest.status === 'claimed') return 'Claimed';
         if (quest.status === 'completed') return 'Ready to claim!';
         const progress = getProgressPercentage(quest);
         return `${progress.toFixed(0)}% Complete`;
     };
 
-    const quests = generateQuests();
+    if (loading) {
+        return (
+            <View style={styles.container}>
+                <View style={styles.headerRow}>
+                    <Image source={questsImg} style={styles.image} resizeMode="contain" />
+                    <View style={styles.headerText}>
+                        <Text style={styles.headerTitle}>Daily Quests</Text>
+                        <Text style={styles.headerSubtitle}>Loading your quests...</Text>
+                    </View>
+                </View>
+            </View>
+        );
+    }
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -302,19 +257,22 @@ const styles = StyleSheet.create({
     },
     headerRow: {
         flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 24,
-        backgroundColor: '#FFF2D8',
-        borderRadius: 16,
-        padding: 12,
+        alignItems: 'flex-start',
+        paddingTop: 20,
+        paddingBottom: 16,
+        paddingHorizontal: 16,
+        marginLeft: -16,
     },
     image: {
-        width: 60,
-        height: 60,
-        marginRight: 12,
+        width: 160,
+        height: 160,
+        marginRight: 16,
+        alignSelf: 'center',
+        marginLeft: -16,
     },
     headerText: {
         flex: 1,
+        paddingTop: 8,
     },
     headerTitle: {
         fontSize: 24,
@@ -329,7 +287,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Fredoka',
     },
     questCard: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'rgba(255, 243, 224, 0.9)',
         borderRadius: 16,
         padding: 16,
         marginBottom: 16,
@@ -338,6 +296,8 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
+        borderWidth: 1,
+        borderColor: '#FFE0B2',
     },
     questBadge: {
         position: 'absolute',
@@ -355,7 +315,10 @@ const styles = StyleSheet.create({
         fontFamily: 'Fredoka',
     },
     questHeader: {
-        marginBottom: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+        marginTop: 24,
     },
     questTitleRow: {
         flexDirection: 'row',

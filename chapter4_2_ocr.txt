@@ -1,0 +1,164 @@
+4.2 OCR Technology for Financial Document Processing
+
+Within the context of financial management applications, the integration of Optical Character Recognition (OCR) technology represents a significant advancement in automated data extraction and processing. This section examines the implementation of OCR capabilities within the system, focusing on the technical architecture and processing pipeline.
+
+4.2.1 Cloud-Based OCR Integration
+
+The system implements a cloud-based OCR solution through integration with the Asprise OCR API, facilitating robust receipt processing capabilities. The implementation encompasses:
+
+1. Multi-Modal Input Support:
+   - Direct camera capture functionality
+   - Gallery image upload support
+   - Format validation for JPEG and PNG files
+
+The following implementation demonstrates the core OCR request handling:
+
+```typescript
+const processImage = async (uri: string) => {
+    const formData = new FormData();
+    formData.append('file', {
+        uri,
+        type: 'image/jpeg',
+        name: 'receipt.jpg',
+    });
+
+    const response = await fetch('https://licenta-ocr-api.onrender.com/process-receipt', {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!response.ok) {
+        throw new Error('Network response was not ok');
+    }
+    return await response.json();
+};
+```
+
+4.2.2 Data Extraction Pipeline
+
+The extraction pipeline comprises multiple stages of processing, each designed to handle specific aspects of financial document analysis:
+
+1. Primary Data Extraction:
+   - Merchant identification through text recognition
+   - Total amount detection with currency parsing
+   - Transaction date extraction
+   - Line item enumeration and processing
+
+2. Data Validation and Normalization:
+   - Currency standardization
+   - Date format normalization
+   - Merchant name cleanup
+   - Amount verification
+
+The implementation demonstrates sophisticated data processing:
+
+```typescript
+const handleReceiptData = async (receipt: RawReceipt) => {
+    const amount = parseFloat(receipt.total) || 0;
+    const date = receipt.date ? new Date(receipt.date) : new Date();
+    
+    let amountInRON = amount;
+    if (receipt.currency) {
+        const currency = receipt.currency.toLowerCase() as SupportedCurrency;
+        const rate = CURRENCY_RATES[currency] || CURRENCY_RATES.ron;
+        amountInRON = amount * rate;
+    }
+
+    return {
+        amount: amountInRON,
+        date: date.toISOString().split('T')[0],
+        merchant: receipt.merchant_name || 'Unknown merchant'
+    };
+};
+```
+
+4.2.3 Intelligent Categorization System
+
+The system employs a multi-layered approach to expense categorization:
+
+1. Merchant-Based Classification:
+   - Pattern matching against known merchant names
+   - Historical transaction analysis
+   - Confidence scoring for category assignment
+
+2. Item-Based Analysis:
+   - Individual item description processing
+   - Category inference from product descriptions
+   - Hierarchical category mapping
+
+The categorization logic is implemented as follows:
+
+```typescript
+const determineCategory = async (receipt: ProcessedReceipt) => {
+    let category = 'Other';
+    let subcategory = 'Miscellaneous';
+    
+    if (receipt.merchant_name) {
+        const merchantMatch = findCategoryByProduct(receipt.merchant_name);
+        if (merchantMatch) {
+            category = merchantMatch.category;
+            subcategory = merchantMatch.subcategory;
+        }
+    }
+    
+    if (category === 'Other' && receipt.items?.length > 0) {
+        for (const item of receipt.items) {
+            const itemMatch = findCategoryByProduct(item.description);
+            if (itemMatch) {
+                category = itemMatch.category;
+                subcategory = itemMatch.subcategory;
+                break;
+            }
+        }
+    }
+    
+    return { category, subcategory };
+};
+```
+
+4.2.4 User Experience Optimization
+
+The implementation incorporates several features to enhance user interaction:
+
+1. Processing Feedback:
+   - Real-time status updates
+   - Progress indicators
+   - Error handling with user-friendly messages
+
+2. Input Flexibility:
+   - Support for multiple image sources
+   - Automatic image format handling
+   - Robust error recovery
+
+3. Result Verification:
+   - Interactive result confirmation
+   - Manual correction capabilities
+   - Confidence score display
+
+The following implementation demonstrates the user feedback system:
+
+```typescript
+const handleUpload = async () => {
+    try {
+        setIsLoading(true);
+        const result = await DocumentPicker.getDocumentAsync({
+            type: ['image/jpeg', 'image/png'],
+            copyToCacheDirectory: true,
+        });
+
+        if (!result.canceled && result.assets?.length > 0) {
+            const parsedData = await processReceipt(result.assets[0]);
+            onReceiptData(parsedData);
+        }
+    } catch (error) {
+        Alert.alert(
+            'OCR Error',
+            'Failed to process the receipt. Please try again or enter details manually.'
+        );
+    } finally {
+        setIsLoading(false);
+    }
+};
+```
+
+The OCR implementation demonstrates a comprehensive approach to financial document processing, combining robust technical capabilities with user-centric design principles. The system's ability to handle various input formats, process complex financial documents, and provide immediate feedback contributes to an efficient and reliable expense tracking solution. 

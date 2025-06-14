@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import rewardsImg from '@assets/decor/aiRewards.png';
@@ -27,7 +27,12 @@ interface QuestRewardsCardProps {
 }
 
 export default function QuestRewardsCard({ userProgress, onClaimReward }: QuestRewardsCardProps): JSX.Element {
+    useEffect(() => {
+        console.log('[QuestRewardsCard] Component mounted with progress:', userProgress);
+    }, [userProgress]);
+
     if (!userProgress) {
+        console.log('[QuestRewardsCard] No user progress available');
         return (
             <View style={styles.container}>
                 <View style={styles.headerRow}>
@@ -42,6 +47,7 @@ export default function QuestRewardsCard({ userProgress, onClaimReward }: QuestR
     }
 
     const getLevelColor = (level: number): [string, string] => {
+        console.log('[QuestRewardsCard] Getting color for level:', level);
         if (level >= 20) return ['#9C27B0', '#BA68C8'];
         if (level >= 15) return ['#F44336', '#EF5350'];
         if (level >= 10) return ['#FF9800', '#FFA726'];
@@ -50,6 +56,7 @@ export default function QuestRewardsCard({ userProgress, onClaimReward }: QuestR
     };
 
     const getBadgeColor = (rarity: string): [string, string] => {
+        console.log('[QuestRewardsCard] Getting color for badge rarity:', rarity);
         switch (rarity) {
             case 'legendary':
                 return ['#FFD700', '#FFC107'];
@@ -65,7 +72,16 @@ export default function QuestRewardsCard({ userProgress, onClaimReward }: QuestR
     const getProgressPercentage = () => {
         const totalPointsForLevel = userProgress.pointsToNextLevel;
         const currentPoints = userProgress.totalPoints % totalPointsForLevel;
-        return (currentPoints / totalPointsForLevel) * 100;
+        const percentage = (currentPoints / totalPointsForLevel) * 100;
+        console.log('[QuestRewardsCard] Calculating progress:', { currentPoints, totalPointsForLevel, percentage });
+        return percentage;
+    };
+
+    const handleBadgeClaim = (badgeId: string) => {
+        console.log('[QuestRewardsCard] Attempting to claim badge:', badgeId);
+        console.log('[QuestRewardsCard] Current badges:', userProgress.badges);
+        console.log('[QuestRewardsCard] onClaimReward handler exists:', !!onClaimReward);
+        onClaimReward?.(badgeId);
     };
 
     return (
@@ -132,7 +148,7 @@ export default function QuestRewardsCard({ userProgress, onClaimReward }: QuestR
                         <TouchableOpacity
                             key={badge.id}
                             style={styles.badgeItem}
-                            onPress={() => onClaimReward?.(badge.id)}
+                            onPress={() => handleBadgeClaim(badge.id)}
                         >
                             <LinearGradient
                                 colors={getBadgeColor(badge.rarity)}
@@ -155,35 +171,42 @@ export default function QuestRewardsCard({ userProgress, onClaimReward }: QuestR
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        backgroundColor: '#FFF9E6',
         borderRadius: 20,
         padding: 16,
     },
     headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 24,
-        backgroundColor: '#FFF2D8',
+        marginBottom: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.7)',
         borderRadius: 16,
         padding: 12,
+        position: 'relative',
+        minHeight: 100,
     },
     image: {
-        width: 60,
-        height: 60,
-        marginRight: 12,
+        width: 80,
+        height: 80,
+        position: 'absolute',
+        left: 0,
+        top: 12,
+        zIndex: 1,
     },
     headerText: {
         flex: 1,
+        paddingTop: 0,
+        marginLeft: 90,
     },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: 'bold',
         color: '#91483C',
         fontFamily: 'Fredoka',
         marginBottom: 4,
     },
     headerSubtitle: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#8B6914',
         fontFamily: 'Fredoka',
     },
@@ -192,6 +215,7 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         padding: 16,
         marginBottom: 16,
+        marginHorizontal: 8,
         elevation: 2,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },

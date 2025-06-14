@@ -50,3 +50,42 @@ export interface Milestone {
     completed: boolean;
     rewardClaimed?: boolean;
 }
+
+export interface Badge {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    rarity: 'common' | 'rare' | 'epic' | 'legendary';
+    unlockedAt: Date;
+}
+
+export interface UserQuest {
+    id: string;
+    userId: string;
+    title: string;
+    description: string;
+    type: 'daily' | 'weekly' | 'monthly' | 'achievement';
+    reward: number;
+    progress: number;
+    target: number;
+    status: 'active' | 'completed' | 'claimed' | 'failed' | 'locked';
+    category?: string;
+    startDate: Date;
+    endDate?: Date;
+    streak?: number;
+    level: number;
+    claimedAt?: Date;
+}
+
+export interface UserProgress {
+    userId: string;
+    level: number;
+    totalPoints: number;
+    pointsToNextLevel: number;
+    questsCompleted: number;
+    currentStreak: number;
+    lastQuestDate?: Date;
+    badges: Badge[];
+    completedQuests: string[]; // Array of completed quest IDs
+}

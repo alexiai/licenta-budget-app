@@ -192,7 +192,7 @@ export default function UnusedCategoriesCard({ analysis }: UnusedCategoriesCardP
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        backgroundColor: '#FFF9E6',
     },
     headerRow: {
         flexDirection: 'row',
@@ -200,32 +200,34 @@ const styles = StyleSheet.create({
         paddingTop: 20,
         paddingBottom: 16,
         paddingHorizontal: 16,
+        marginLeft: -16,
     },
     image: {
-        width: 120,
-        height: 120,
+        width: 160,
+        height: 160,
         marginRight: 16,
         alignSelf: 'center',
+        marginLeft: -16,
     },
     headerText: {
         flex: 1,
         paddingTop: 8,
     },
     headerTitle: {
-        fontSize: 22,
+        fontSize: 28,
         fontWeight: 'bold',
         color: '#90483c',
         fontFamily: 'Fredoka',
         marginBottom: 8,
     },
     headerSubtitle: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#91483C',
         fontFamily: 'Fredoka',
         marginTop: 4,
     },
     insightCard: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'rgba(255, 243, 224, 0.9)',
         borderRadius: 16,
         padding: 16,
         marginBottom: 16,
@@ -234,6 +236,8 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
+        borderWidth: 1,
+        borderColor: '#FFE0B2',
     },
     statusBadge: {
         position: 'absolute',
@@ -254,6 +258,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 12,
+        marginTop: 24,
     },
     statusIcon: {
         fontSize: 24,

@@ -1,33 +1,19 @@
 import { View, Text, TouchableOpacity, ImageBackground, StyleSheet } from 'react-native';
-import { useEffect, useState } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '@lib/firebase';
 import { useRouter } from 'expo-router';
 import welcomeBg from '@assets/bg/welcome-screen.png';
+import { useAuth } from '../_layout';
 
 export default function WelcomeScreen() {
-    const [user, setUser] = useState<User | null>(null);
-    const [authChecked, setAuthChecked] = useState(false);
+    const { user, authChecked } = useAuth();
     const router = useRouter();
 
-    useEffect(() => {
-        const unsub = onAuthStateChanged(auth, (firebaseUser) => {
-            setUser(firebaseUser);
-            setAuthChecked(true); // ✅ important
-        });
-        return unsub;
-    }, []);
-
-    useEffect(() => {
-        if (!authChecked) return;
+    const handleStart = () => {
+        if (!authChecked) return; // prevent early navigation
         if (user) {
             router.replace('/tabs/overview/list');
+        } else {
+            router.push('/auth/login');
         }
-    }, [authChecked, user]);
-
-    const handleStart = () => {
-        if (!authChecked) return; // prevenim navigarea prea devreme
-        if (!user) router.push('/auth/login');
     };
 
     if (!authChecked) return null;
@@ -50,12 +36,11 @@ export default function WelcomeScreen() {
     );
 }
 
-
 const styles = StyleSheet.create({
     wrapper: {
         flex: 1,
-        backgroundColor: '#6A4C32', // maro-portocaliu (margine)
-        padding: 4, // margine vizibilă în jurul imaginii
+        backgroundColor: '#6A4C32', // brown-orange (border)
+        padding: 4, // visible margin around image
     },
     bg: {
         flex: 1,
@@ -63,10 +48,10 @@ const styles = StyleSheet.create({
         height: '100%',
         justifyContent: 'flex-end',
         borderWidth: 3,
-        borderColor: '#6A4C32', // marginea maro
+        borderColor: '#6A4C32', // brown border
     },
     footerBar: {
-        backgroundColor: '#FFE9B8', // crem-bej pentru contrast
+        backgroundColor: '#FFE9B8', // cream-beige for contrast
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
         paddingTop: 8,

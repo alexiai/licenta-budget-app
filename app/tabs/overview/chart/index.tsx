@@ -1,16 +1,34 @@
 // chart/index.tsx - with budget period filtering
 import { ScrollView, Text, View, Image, ImageBackground, Dimensions, TouchableOpacity } from 'react-native';
-import { PieChart as ChartKitPie } from 'react-native-chart-kit';
+import { PieChart } from 'react-native-chart-kit';
 import { useEffect, useState } from 'react';
 import { auth, db } from '@lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
-import styles from '@styles/overviewChart';
-import OverviewHeader from '@components/OverviewHeader';
+import styles from '../../../../styles/overviewChart';
+import OverviewHeader from '../../../../components/OverviewHeader';
 import bg from '@assets/bg/background3.png';
 import carrotIcon from '@assets/icons/carrotcoinlist.png';
 import categories from '@lib/categories';
 import { filterExpensesByPeriod, getPeriodTitle } from '@lib/utils/expenseFilters';
+
+interface Expense {
+    date: string;
+    amount: string;
+    category: string;
+    subcategory: string;
+}
+
+interface CategoryInsights {
+    [category: string]: {
+        [subcategory: string]: Expense[];
+    };
+}
+
+interface PieDataItem {
+    name: string;
+    value: number;
+}
 
 export default function ChartOverview() {
     const screenWidth = Dimensions.get('window').width;
@@ -52,34 +70,41 @@ export default function ChartOverview() {
         if (!allExpenses.length) return;
 
         let filteredExpenses = allExpenses;
+        const currentDate = new Date();
+        const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + periodOffset, 1);
+        const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + periodOffset + 1, 0);
 
-        if (selectedBudget) {
-            filteredExpenses = filterExpensesByPeriod(allExpenses, selectedBudget, periodOffset);
-        }
-
-        const grouped: any = {};
-        let totalSpent = 0;
-
-        filteredExpenses.forEach(exp => {
-            const cat = exp.category;
-            const sub = exp.subcategory || 'Other';
-
-            if (!grouped[cat]) grouped[cat] = {};
-            if (!grouped[cat][sub]) grouped[cat][sub] = [];
-            grouped[cat][sub].push(exp);
-
-            totalSpent += Number(exp.amount || 0);
+        // Filter expenses for the selected month
+        filteredExpenses = allExpenses.filter(exp => {
+            const expDate = new Date(exp.date);
+            return expDate >= firstDayOfMonth && expDate <= lastDayOfMonth;
         });
 
-        setInsights(grouped);
-        setTotal(totalSpent);
+        // Process filtered expenses for insights
+        const categoryInsights: CategoryInsights = {};
+        let monthTotal = 0;
+
+        filteredExpenses.forEach((exp: Expense) => {
+            if (!categoryInsights[exp.category]) {
+                categoryInsights[exp.category] = {};
+            }
+            if (!categoryInsights[exp.category][exp.subcategory]) {
+                categoryInsights[exp.category][exp.subcategory] = [];
+            }
+            categoryInsights[exp.category][exp.subcategory].push(exp);
+            monthTotal += parseFloat(exp.amount || '0');
+        });
+
+        setInsights(categoryInsights);
+        setTotal(monthTotal);
 
         const colors = ['#f94144', '#f3722c', '#f9c74f', '#90be6d', '#43aa8b', '#577590', '#6A4C93', '#e5989b'];
 
-        const pie = categories.map((cat, i) => {
-            const sum = Object.values(grouped[cat.label] || {})
+        // Update pie chart data
+        const newPieData = categories.map((cat, i) => {
+            const sum = Object.values(categoryInsights[cat.label] || {})
                 .flat()
-                .reduce((acc: number, e: any) => acc + Number(e.amount), 0);
+                .reduce((acc: number, exp: Expense) => acc + parseFloat(exp.amount || '0'), 0);
 
             return {
                 name: cat.label,
@@ -88,9 +113,22 @@ export default function ChartOverview() {
                 legendFontColor: '#91483c',
                 legendFontSize: 13,
             };
-        }).filter(entry => entry.value > 0);
+        }).filter(item => item.value > 0);
 
-        setPieData(pie);
+        setPieData(newPieData);
+    };
+
+    const getPeriodTitle = () => {
+        const currentDate = new Date();
+        const targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + periodOffset, 1);
+        const startDate = targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const lastDay = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+        const endDate = lastDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `${startDate} - ${endDate}`;
+    };
+
+    const navigatePeriod = (direction: 'prev' | 'next') => {
+        setPeriodOffset(prev => prev + (direction === 'prev' ? -1 : 1));
     };
 
     useEffect(() => {
@@ -108,10 +146,6 @@ export default function ChartOverview() {
             setSelectedBudget(null);
         }
         setPeriodOffset(0); // Reset to current period when budget changes
-    };
-
-    const navigatePeriod = (direction: 'prev' | 'next') => {
-        setPeriodOffset(prev => prev + (direction === 'prev' ? -1 : 1));
     };
 
     const toggleCategory = (cat: string) => {
@@ -139,8 +173,6 @@ export default function ChartOverview() {
         }));
     };
 
-    const periodTitle = selectedBudget ? getPeriodTitle(selectedBudget, periodOffset) : 'All Time';
-
     const getChartData = () => {
         return pieData;
     };
@@ -148,28 +180,26 @@ export default function ChartOverview() {
     return (
         <ImageBackground source={bg} resizeMode="cover" style={styles.container}>
             <View style={styles.topContainer}>
-                <OverviewHeader onBudgetChange={handleBudgetChange} />
+                <OverviewHeader />
                 <View style={styles.headerContent}>
                     <View style={styles.periodNavigation}>
                         <TouchableOpacity
                             style={styles.periodArrow}
                             onPress={() => navigatePeriod('prev')}
-                            disabled={!selectedBudget}
                         >
-                            <Ionicons name="chevron-back" size={24} color={selectedBudget ? "#91483c" : "#ccc"} />
+                            <Ionicons name="chevron-back" size={24} color="#91483c" />
                         </TouchableOpacity>
 
                         <View style={styles.periodTitle}>
                             <Text style={styles.title}>Burrow Insights</Text>
-                            <Text style={styles.periodText}>{periodTitle}</Text>
+                            <Text style={styles.periodText}>{getPeriodTitle()}</Text>
                         </View>
 
                         <TouchableOpacity
                             style={styles.periodArrow}
                             onPress={() => navigatePeriod('next')}
-                            disabled={!selectedBudget}
                         >
-                            <Ionicons name="chevron-forward" size={24} color={selectedBudget ? "#91483c" : "#ccc"} />
+                            <Ionicons name="chevron-forward" size={24} color="#91483c" />
                         </TouchableOpacity>
                     </View>
 
@@ -181,30 +211,30 @@ export default function ChartOverview() {
                 style={[styles.scrollableContent]}
                 contentContainerStyle={[styles.scrollContainer]}
             >
-                <View style={[styles.pieSection]}> {/* DEBUG COLOR: galben */}
-                    <View style={[styles.pieWrapper]}> {/* DEBUG COLOR: verde */}
-                        <ChartKitPie
+                <View style={styles.pieSection}>
+                    <View style={styles.pieWrapper}>
+                        <PieChart
                             data={getChartData()}
-                            width={300} // sau 0.6, ajustează
+                            width={300}
                             height={150}
                             accessor="value"
                             backgroundColor="transparent"
                             absolute
                             hasLegend={false}
+                            paddingLeft="0"
                             chartConfig={{
-                                color: () => `#000`,
+                                color: () => '#000',
                                 labelColor: () => 'transparent',
                                 propsForLabels: { fontSize: 0 },
                             }}
                             style={{
                                 borderRadius: 16,
-                                transform: [{ translateX: 70 }], // mutat spre dreapta
+                                transform: [{ translateX: 70 }],
                             }}
                         />
-
                     </View>
 
-                    <View style={[styles.legendBox, ]}> {/* DEBUG COLOR: portocaliu */}
+                    <View style={styles.legendBox}>
                         {pieData
                             .sort((a, b) => b.value - a.value)
                             .map((item, i) => {
@@ -213,7 +243,7 @@ export default function ChartOverview() {
                                     <View key={item.name} style={styles.legendItem}>
                                         <View style={[styles.colorDot, { backgroundColor: item.color }]} />
                                         <Text style={styles.legendText}>
-                                            {item.name}:<Text style={styles.legendPercent}> {percent}%</Text>
+                                            {`${item.name}: ${percent}%`}
                                         </Text>
                                     </View>
                                 );
@@ -223,15 +253,19 @@ export default function ChartOverview() {
 
                 {Object.entries(insights).map(([cat, subObj]: any) => (
                     <View key={cat} style={styles.detailsBox}>
-                        <Text onPress={() => toggleCategory(cat)} style={styles.insightTitle}>
-                            {expandedCategories[cat] ? '▼' : '▶'} {cat}
-                        </Text>
+                        <TouchableOpacity onPress={() => toggleCategory(cat)} style={styles.insightTitleContainer}>
+                            <Text style={styles.insightTitle}>
+                                {`${expandedCategories[cat] ? '▼' : '▶'} ${cat}`}
+                            </Text>
+                        </TouchableOpacity>
                         {expandedCategories[cat] &&
                             Object.entries(subObj).map(([sub, list]: any) => (
                                 <View key={sub} style={styles.subcategoryBox}>
-                                    <Text onPress={() => toggleSubcategory(sub)} style={styles.subcategoryText}>
-                                        {expandedSubcategories[sub] ? '▾' : '▸'} {sub}
-                                    </Text>
+                                    <TouchableOpacity onPress={() => toggleSubcategory(sub)} style={styles.subcategoryContainer}>
+                                        <Text style={styles.subcategoryText}>
+                                            {`${expandedSubcategories[sub] ? '▾' : '▸'} ${sub}`}
+                                        </Text>
+                                    </TouchableOpacity>
                                     {expandedSubcategories[sub] &&
                                         list.map((exp: any, index: number) => (
                                             <View key={index} style={styles.expenseBox}>

@@ -7,16 +7,14 @@ export default StyleSheet.create({
     },
 
     fixedHeader: {
-        paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: 20,
+        marginBottom: 10,
     },
 
     topRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-
+        justifyContent: 'space-between',
+        marginBottom: 10,
     },
 
     title: {
@@ -25,11 +23,17 @@ export default StyleSheet.create({
         color: '#91483c',
         fontFamily: 'Fredoka',
         textAlign: 'center',
-        marginTop: 110,
+        marginTop: 90,
     },
 
     editButton: {
-        padding: 6,
+        padding: 8,
+        borderRadius: 20,
+        backgroundColor: '#ffe599',
+        borderWidth: 2,
+        borderColor: '#eda82f',
+        marginRight: 30,
+        marginTop: 8
     },
 
     center: {
@@ -220,5 +224,12 @@ export default StyleSheet.create({
         fontSize: 12,
         fontFamily: 'Fredoka',
         color: '#52366b',
+    },
+
+    budgetSelectorWrapper: {
+        flex: 1,
+        marginLeft: 30,
+        marginRight: -10,
+        marginTop:19
     },
 });

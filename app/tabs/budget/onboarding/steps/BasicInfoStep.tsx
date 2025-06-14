@@ -1,16 +1,30 @@
-import { View, Text, TextInput, TouchableOpacity, ImageBackground, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ImageBackground, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { useState } from 'react';
-import styles from '@styles/basicInfoStep';
-import bg from '@assets/bg/basicinfobackground.png';
+import styles from '../../../../../styles/basicInfoStep';
+import bg from '@assets/bg/steps.png';
+import { useRouter } from 'expo-router';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db, auth } from '@lib/firebase';
 
+interface BasicInfoStepProps {
+    onNext: () => void;
+    data: {
+        name?: string;
+        period?: string;
+        startDay?: string;
+    };
+    updateData: (data: { name: string; period: string; startDay: string }) => void;
+}
 
-export default function BasicInfoStep({ onNext, data, updateData }) {
+export default function BasicInfoStep({ onNext, data, updateData }: BasicInfoStepProps) {
+    const router = useRouter();
     const [name, setName] = useState(data.name || '');
     const [periodOpen, setPeriodOpen] = useState(false);
     const [period, setPeriod] = useState(data.period || 'monthly');
     const [startDayOpen, setStartDayOpen] = useState(false);
     const [startDay, setStartDay] = useState(data.startDay || '1');
+    const [isValidating, setIsValidating] = useState(false);
 
     const periodOptions = [
         { label: 'Monthly 📅', value: 'monthly' },
@@ -23,20 +37,59 @@ export default function BasicInfoStep({ onNext, data, updateData }) {
         value: `${i + 1}`,
     }));
 
-    const handleContinue = () => {
-        updateData({ name, period, startDay });
-        onNext();
+    const validateBudgetName = async () => {
+        if (!name.trim()) {
+            Alert.alert('Error', 'Please enter a budget name');
+            return false;
+        }
+
+        setIsValidating(true);
+        try {
+            const user = auth.currentUser;
+            if (!user) {
+                Alert.alert('Error', 'You must be logged in to create a budget');
+                return false;
+            }
+
+            const q = query(
+                collection(db, 'budgets'),
+                where('userId', '==', user.uid),
+                where('name', '==', name.trim())
+            );
+            const snapshot = await getDocs(q);
+
+            if (!snapshot.empty) {
+                Alert.alert('Error', 'A budget with this name already exists. Please choose a different name.');
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error validating budget name:', error);
+            Alert.alert('Error', 'Failed to validate budget name. Please try again.');
+            return false;
+        } finally {
+            setIsValidating(false);
+        }
+    };
+
+    const handleContinue = async () => {
+        const isValid = await validateBudgetName();
+        if (isValid) {
+            updateData({ name: name.trim(), period, startDay });
+            onNext();
+        }
+    };
+
+    const handleBack = () => {
+        router.replace('/tabs/budget');
     };
 
     return (
         <ImageBackground
             source={bg}
             resizeMode="cover"
-            style={{
-                flex: 1,
-                width: '110%',     // Lărgește imaginea pe lățime
-                transform: [{ translateX: -20 }, { translateY: -40 }], // deplasează în stânga și puțin în sus
-            }}
+            style={styles.wrapper}
         >
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -98,15 +151,16 @@ export default function BasicInfoStep({ onNext, data, updateData }) {
                         />
                     </View>
 
-                    <TouchableOpacity onPress={handleContinue} style={styles.button}>
-                        <Text style={styles.buttonText}>Next</Text>
-                    </TouchableOpacity>
+                    <View style={styles.buttonContainer}>
+                        <TouchableOpacity onPress={handleBack} style={[styles.button, styles.backButton]}>
+                            <Text style={[styles.buttonText, styles.backButtonText]}>Back</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleContinue} style={styles.button}>
+                            <Text style={styles.buttonText}>Next</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </KeyboardAvoidingView>
         </ImageBackground>
-
     );
-
-
-
 }

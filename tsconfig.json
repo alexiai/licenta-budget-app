@@ -5,22 +5,33 @@
     "module": "esnext",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["app/*"],
-      "@tabs/*": ["app/tabs/*"],
-      "@components/*": ["components/*"],
-      "@constants/*": ["constants/*"],
-      "@hooks/*": ["app/hooks/*"],
-      "@lib/*": ["lib/*"],
-      "@home/*":["app/home/*"],
-      "@styles/*": ["styles/*"],
-      "@assets/*": ["assets/*"]
+      "@/*": [
+        "*"
+      ],
+      "@components/*": [
+        "app/components/*"
+      ],
+      "@services/*": [
+        "app/services/*"
+      ],
+      "@styles/*": [
+        "app/styles/*"
+      ],
+      "@lib/*": [
+        "lib/*"
+      ],
+      "@assets/*": [
+        "assets/*"
+      ],
+      "@tabs/*": [
+        "app/tabs/*"
+      ]
     }
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts",
-    "**/*.ts", "**/*.tsx"
+    "expo-env.d.ts"
   ]
 }

@@ -1,7 +1,7 @@
 import { View, ScrollView, Text, TouchableOpacity, TextInput, Image, ImageBackground, KeyboardAvoidingView, Platform } from 'react-native';
 import { useState } from 'react';
-import styles from '@styles/expensesStep';
-import bg from '@assets/bg/basicinfobackground.png';
+import styles from '../../../../../styles/expensesStep';
+import bg from '@assets/bg/steps.png';
 import expenseCategories from '@lib/categories';
 
 interface Category {
@@ -77,7 +77,7 @@ export default function ExpensesStep({ onNext, onBack, data, updateData }: Expen
         onNext();
     };
 
-    // împărțim lista de categorii în perechi de câte 2
+    // Split categories into pairs of 2
     const categoryPairs = [];
     for (let i = 0; i < expenseCategories.length; i += 2) {
         categoryPairs.push(expenseCategories.slice(i, i + 2));
@@ -87,14 +87,18 @@ export default function ExpensesStep({ onNext, onBack, data, updateData }: Expen
         <ImageBackground
             source={bg}
             resizeMode="cover"
-            style={{
-                flex: 1,
-                width: '110%',
-                transform: [{ translateX: -20 }, { translateY: -40 }],
-            }}
+            style={styles.wrapper}
         >
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-                <ScrollView contentContainerStyle={styles.container}>
+            <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+            >
+                <ScrollView 
+                    contentContainerStyle={styles.container}
+                    showsVerticalScrollIndicator={false}
+                    bounces={false}
+                >
                     <Text style={styles.title}>Pick Your Expense Boxes</Text>
                     <Text style={styles.subtitle}>Choose categories & add planned amounts</Text>
 
@@ -102,31 +106,40 @@ export default function ExpensesStep({ onNext, onBack, data, updateData }: Expen
                         {remaining < 0 ? `Over budget by ${Math.abs(remaining)} RON` : `Remaining budget: ${remaining} RON`}
                     </Text>
 
-                    {categoryPairs.map((pair, idx) => (
-                        <View key={idx} style={styles.row}>
-                            {pair.map((item) => {
-                                const selectedCat = selected.find((cat) => cat.name === item.label);
+                    {categoryPairs.map((pair, pairIndex) => (
+                        <View key={pairIndex} style={styles.row}>
+                            {pair.map((cat) => {
+                                const isSelected = selected.some((s) => s.name === cat.label);
                                 return (
-                                    <View key={item.label} style={styles.card}>
+                                    <View key={cat.label} style={styles.card}>
                                         <TouchableOpacity
-                                            style={[styles.categoryBox, selectedCat && styles.activeCategory]}
-                                            onPress={() => toggleCategory(item.label)}
+                                            onPress={() => toggleCategory(cat.label)}
+                                            style={[styles.categoryBox, isSelected && styles.activeCategory]}
                                         >
-                                            <Image source={item.icon} style={styles.icon} />
-                                            <Text style={styles.catLabel}>{item.label}</Text>
+                                            <Image source={cat.icon} style={styles.icon} />
+                                            <Text style={styles.catLabel}>{cat.label}</Text>
                                         </TouchableOpacity>
-                                        {selectedCat &&
-                                            selectedCat.subcategories.map((sub, i) => (
-                                                <TextInput
-                                                    key={i}
-                                                    placeholder={`${sub.name} (RON)`}
-                                                    keyboardType="numeric"
-                                                    placeholderTextColor="#999"
-                                                    value={sub.amount}
-                                                    onChangeText={(text) => updateAmount(item.label, sub.name, text)}
-                                                    style={styles.input}
-                                                />
-                                            ))}
+
+                                        {isSelected &&
+                                            cat.subcategories.map((sub) => {
+                                                const selectedCat = selected.find((s) => s.name === cat.label);
+                                                const selectedSub = selectedCat?.subcategories.find(
+                                                    (s) => s.name === sub
+                                                );
+                                                return (
+                                                    <TextInput
+                                                        key={sub}
+                                                        style={styles.input}
+                                                        placeholder={sub}
+                                                        placeholderTextColor="#C4A471"
+                                                        keyboardType="numeric"
+                                                        value={selectedSub?.amount || ''}
+                                                        onChangeText={(value) =>
+                                                            updateAmount(cat.label, sub, value)
+                                                        }
+                                                    />
+                                                );
+                                            })}
                                     </View>
                                 );
                             })}
@@ -134,19 +147,11 @@ export default function ExpensesStep({ onNext, onBack, data, updateData }: Expen
                     ))}
 
                     <View style={styles.buttonContainer}>
-                        <TouchableOpacity
-                            onPress={onBack}
-                            style={[styles.button, styles.backButton]}
-                        >
+                        <TouchableOpacity onPress={onBack} style={[styles.button, styles.backButton]}>
                             <Text style={[styles.buttonText, styles.backButtonText]}>Back</Text>
                         </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={handleContinue}
-                            style={[styles.button, remaining < 0 && { backgroundColor: '#ccc' }]}
-                            disabled={remaining < 0}
-                        >
-                            <Text style={styles.buttonText}>Continue</Text>
+                        <TouchableOpacity onPress={handleContinue} style={styles.button}>
+                            <Text style={styles.buttonText}>Next</Text>
                         </TouchableOpacity>
                     </View>
                 </ScrollView>

@@ -4,6 +4,7 @@ export default StyleSheet.create({
     headerContainer: {
         zIndex: 1000,
         marginLeft: 10,
+        marginTop: 10,
     },
     switchRow: {
         flexDirection: 'row',

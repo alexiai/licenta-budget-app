@@ -8,7 +8,7 @@ import BasicInfoStep from './steps/BasicInfoStep';
 import IncomeStep from './steps/IncomeStep';
 import ExpensesStep from './steps/ExpensesStep';
 import SummaryStep from './steps/SummaryStep';
-import bg from '@assets/bg/basicinfobackground.png';
+import bg from '@assets/bg/steps.png';
 import { Ionicons } from '@expo/vector-icons';
 
 interface FormData {
@@ -98,7 +98,7 @@ export default function BudgetOnboarding() {
                 {
                     text: 'Yes, Cancel',
                     style: 'destructive',
-                    onPress: () => router.back(),
+                    onPress: () => router.replace('/tabs/budget'),
                 },
             ]
         );

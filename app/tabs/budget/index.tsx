@@ -1,19 +1,47 @@
 // ✅ BudgetScreen.tsx
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {View, Text, TouchableOpacity, FlatList, ActivityIndicator, ImageBackground, Image,} from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from '@lib/firebase';
-import BudgetSelector from '@components/BudgetSelector';
-import styles from '@styles/budget';
+import BudgetSelector from '../../../components/BudgetSelector';
+import styles from '../../../styles/budget';
 import { Dimensions } from 'react-native';
 import { PieChart as ChartKitPie } from 'react-native-chart-kit';
 import EditBudget from './EditBudget';
-import bg from '@assets/bg/budgetbackground.png';
+import bg from '@assets/bg/budgetback.png';
 import categories from '@lib/categories';
 import { Ionicons } from '@expo/vector-icons';
+
+interface Income {
+    type: string;
+    amount: string;
+}
+
+interface Subcategory {
+    name: string;
+    amount: string;
+}
+
+interface Category {
+    name: string;
+    subcategories: Subcategory[];
+}
+
+interface BudgetData {
+    incomes: Income[];
+    categories: Category[];
+}
+
+interface ChartDataItem {
+    name: string;
+    value: number;
+    color: string;
+    legendFontColor: string;
+    legendFontSize: number;
+}
 
 export default function BudgetScreen() {
     const router = useRouter();
@@ -28,10 +56,12 @@ export default function BudgetScreen() {
         if (snap.exists()) setBudgetData(snap.data());
     };
 
-    const handleBudgetChange = async (id: string) => {
-        setSelectedBudget(id);
-        await AsyncStorage.setItem('selectedBudget', id);
-        await loadBudget(id);
+    const handleBudgetChange = async (id: string | null) => {
+        if (id) {
+            setSelectedBudget(id);
+            await AsyncStorage.setItem('selectedBudget', id);
+            await loadBudget(id);
+        }
     };
 
     const handleEditChange = (updatedCategories: any[], updatedIncomes: any[]) => {
@@ -63,13 +93,18 @@ export default function BudgetScreen() {
         fetchData();
     }, []);
 
-    const getTotalIncome = () => (budgetData?.incomes ?? []).reduce((sum, i) => sum + parseFloat(i.amount || '0'), 0);
-    const getTotalPlannedExpenses = () => (budgetData?.categories ?? []).reduce((sum, cat) => sum + (cat.subcategories ?? []).reduce((s, sub) => s + parseFloat(sub.amount || '0'), 0), 0);
+    const getTotalIncome = () => 
+        (budgetData?.incomes ?? []).reduce((sum: number, i: Income) => sum + parseFloat(i.amount || '0'), 0);
+    
+    const getTotalPlannedExpenses = () => 
+        (budgetData?.categories ?? []).reduce((sum: number, cat: Category) => 
+            sum + (cat.subcategories ?? []).reduce((s: number, sub: Subcategory) => 
+                s + parseFloat(sub.amount || '0'), 0), 0);
 
     const getChartKitData = () => {
         const baseColors = ['#f94144', '#f3722c', '#f9c74f', '#90be6d', '#43aa8b', '#577590', '#6A4C93', '#e5989b'];
-        return (budgetData?.categories ?? []).map((cat, index) => {
-            const total = cat.subcategories?.reduce((sum, sub) => sum + parseFloat(sub.amount || '0'), 0);
+        return (budgetData?.categories ?? []).map((cat: Category, index: number) => {
+            const total = cat.subcategories?.reduce((sum: number, sub: Subcategory) => sum + parseFloat(sub.amount || '0'), 0);
             return {
                 name: cat.name,
                 value: total,
@@ -77,7 +112,7 @@ export default function BudgetScreen() {
                 legendFontColor: '#91483c',
                 legendFontSize: 13,
             };
-        }).filter((entry) => entry.value > 0);
+        }).filter((entry: ChartDataItem) => entry.value > 0);
     };
 
     const getSubcategoryIcon = (subName: string) => {
@@ -103,7 +138,13 @@ export default function BudgetScreen() {
         <ImageBackground source={bg} resizeMode="cover" style={styles.container}>
             <View style={styles.fixedHeader}>
                 <View style={styles.topRow}>
-                    <BudgetSelector onBudgetChange={handleBudgetChange} selectedBudget={selectedBudget} />
+                    <View style={styles.budgetSelectorWrapper}>
+                        <BudgetSelector 
+                            onBudgetChange={handleBudgetChange} 
+                            selectedBudget={selectedBudget}
+                            onNewBudget={() => router.push('/tabs/budget/onboarding')}
+                        />
+                    </View>
                     <TouchableOpacity onPress={() => setIsEditing((prev) => !prev)} style={styles.editButton}>
                         <Feather name={isEditing ? 'check' : 'edit'} size={22} color="#91483c" />
                     </TouchableOpacity>
@@ -120,11 +161,11 @@ export default function BudgetScreen() {
             ) : (
                 <FlatList
                     data={budgetData.categories}
-                    keyExtractor={(item, index) => `cat-${index}`}
-                    renderItem={({ item: cat, index }) => (
+                    keyExtractor={(item: Category, index: number) => `cat-${index}`}
+                    renderItem={({ item: cat, index }: { item: Category; index: number }) => (
                         <View>
                             <Text style={styles.section}>{cat.name}</Text>
-                            {cat.subcategories.map((sub, j) => (
+                            {cat.subcategories.map((sub: Subcategory, j: number) => (
                                 <View key={`sub-${j}`} style={styles.itemRow}>
                                     <Image source={getSubcategoryIcon(sub.name)} style={styles.categoryIcon} />
                                     <Text style={styles.itemText}>{sub.name}</Text>
@@ -163,6 +204,7 @@ export default function BudgetScreen() {
                                                 backgroundColor="transparent"
                                                 absolute
                                                 hasLegend={false}
+                                                paddingLeft="0"
                                                 chartConfig={{
                                                     color: () => `#000`,
                                                     labelColor: () => 'transparent',
@@ -176,9 +218,9 @@ export default function BudgetScreen() {
 
                                         <View style={styles.chartLegendBox}>
                                             {getChartKitData()
-                                                .sort((a, b) => b.value - a.value)
-                                                .map((item, i) => {
-                                                    const totalValue = getChartKitData().reduce((sum, entry) => sum + entry.value, 0);
+                                                .sort((a: ChartDataItem, b: ChartDataItem) => b.value - a.value)
+                                                .map((item: ChartDataItem, i: number) => {
+                                                    const totalValue = getChartKitData().reduce((sum: number, entry: ChartDataItem) => sum + entry.value, 0);
                                                     const percent = totalValue > 0 ? ((item.value / totalValue) * 100).toFixed(0) : 0;
                                                     return (
                                                         <View key={item.name} style={styles.chartLegendItem}>
@@ -195,7 +237,7 @@ export default function BudgetScreen() {
                             </View>
 
                             <Text style={styles.section}>Income</Text>
-                            {budgetData.incomes.map((income, idx) => (
+                            {budgetData.incomes.map((income: Income, idx: number) => (
                                 <View key={`inc-${idx}`} style={styles.itemRow}>
                                     <Image source={require('@assets/icons/income.png')} style={styles.categoryIcon} />
                                     <Text style={styles.itemText}>{income.type}</Text>

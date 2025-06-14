@@ -29,22 +29,32 @@ export default function AiScreen(): JSX.Element {
 
     useEffect(() => {
         const loadData = async () => {
+            console.log('[AiScreen] Starting data load');
             try {
-                if (!auth.currentUser) return;
+                if (!auth.currentUser) {
+                    console.log('[AiScreen] No user logged in');
+                    return;
+                }
+                console.log('[AiScreen] Current user:', auth.currentUser.uid);
 
                 // Fetch expenses
                 const expensesRef = collection(db, 'expenses');
                 const q = query(expensesRef, where('userId', '==', auth.currentUser.uid));
+                console.log('[AiScreen] Fetching expenses...');
                 const querySnapshot = await getDocs(q);
                 const expensesData = querySnapshot.docs.map(doc => ({
                     ...doc.data(),
                     id: doc.id
                 })) as ExpenseData[];
+                console.log('[AiScreen] Fetched expenses:', {
+                    count: expensesData.length,
+                    sample: expensesData.slice(0, 2)
+                });
                 setExpenses(expensesData);
 
-                // TODO: Generate analysis from expenses
-                // For now, we'll use dummy data
-                setAnalysis({
+                // Generate analysis
+                console.log('[AiScreen] Generating analysis...');
+                const analysisData: SpendingAnalysis = {
                     totalThisMonth: 1000,
                     totalLastMonth: 900,
                     averageDailySpending: 33.33,
@@ -83,11 +93,21 @@ export default function AiScreen(): JSX.Element {
                         isHolidaySeason: false,
                         month: new Date().toLocaleString('default', { month: 'long' })
                     }
-                });
+                };
+                console.log('[AiScreen] Generated analysis:', analysisData);
+                setAnalysis(analysisData);
 
                 setLoading(false);
+                console.log('[AiScreen] Data load completed');
             } catch (error) {
-                console.error('Error loading data:', error);
+                console.error('[AiScreen] Error loading data:', error);
+                if (error instanceof Error) {
+                    console.error('[AiScreen] Error details:', {
+                        name: error.name,
+                        message: error.message,
+                        stack: error.stack
+                    });
+                }
                 setLoading(false);
             }
         };
@@ -157,6 +177,14 @@ export default function AiScreen(): JSX.Element {
     ];
 
     const renderContent = () => {
+        console.log('[AiScreen] Rendering content for tab:', activeTab);
+        console.log('[AiScreen] Current state:', {
+            showChat,
+            loading,
+            hasAnalysis: !!analysis,
+            expensesCount: expenses.length
+        });
+
         switch (activeTab) {
             case 'tips':
                 return (
@@ -179,6 +207,10 @@ export default function AiScreen(): JSX.Element {
                     />
                 );
             case 'quests':
+                console.log('[AiScreen] Rendering quests tab with:', {
+                    hasAnalysis: !!analysis,
+                    expensesCount: expenses.length
+                });
                 return (
                     <MiniQuestsCard 
                         analysis={analysis}
@@ -461,6 +493,8 @@ const styles = StyleSheet.create({
         right: 20,
         alignItems: 'center',
         justifyContent: 'center',
+        zIndex: 9999,
+        elevation: 9999,
     },
     bunnyIcon: {
         position: 'absolute',

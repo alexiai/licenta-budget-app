@@ -8,24 +8,27 @@ export default StyleSheet.create({
     },
     fixedHeader: {
         marginBottom: 10,
+        marginTop: 70,
     },
     topRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 10,
-    },
-    budgetSelectorWrapper: {
-        flex: 1,
-        marginLeft: 20,
-        marginRight: 10,
+        justifyContent: 'flex-end',
+        marginBottom: -45,
+        marginTop: -35,
+        position: 'relative',
+        zIndex: 2,
     },
     editButton: {
-        padding: 8,
+        padding: 5,
         borderRadius: 20,
         backgroundColor: '#ffe599',
         borderWidth: 2,
         borderColor: '#eda82f',
+        marginRight: 20,
+        position: 'absolute',
+        right: 8,
+        top: -30,
     },
     editableExpense: {
         opacity: 0.8,
@@ -37,6 +40,7 @@ export default StyleSheet.create({
         textAlign: 'center',
         marginBottom: 6,
         fontFamily: 'Fredoka',
+        marginTop: 15,
     },
     balance: {
         fontSize: 25,
@@ -46,6 +50,7 @@ export default StyleSheet.create({
         marginBottom: 20,
         fontFamily: 'Fredoka',
         letterSpacing: -0.7,
+        marginTop: -15,
     },
     dateGroup: {
         marginBottom: 24,
