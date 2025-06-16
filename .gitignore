@@ -45,3 +45,4 @@ server/*.json
 # Optional
 app-example
 .vercel
+serviceAccountKey.json
