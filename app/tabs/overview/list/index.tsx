@@ -1,8 +1,8 @@
 // overview/list/index.tsx - with budget period filtering
-import { View, Text, FlatList, TouchableOpacity, ImageBackground, Image } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ImageBackground, Image, Alert } from 'react-native';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { db, auth } from '@lib/firebase';
-import { collection, query, where, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import OverviewHeader from '../../../../components/OverviewHeader';
@@ -22,7 +22,48 @@ interface Expense {
     note?: string;
     date: string;
     source?: string;
+    carrotCoins?: number;
 }
+
+const ExpenseItem = ({ expense, isEditing, onDelete }: { 
+    expense: Expense; 
+    isEditing: boolean; 
+    onDelete: (id: string) => void;
+}) => {
+    const router = useRouter();
+    
+    return (
+        <View style={styles.expenseBox}>
+            <TouchableOpacity 
+                style={[styles.expenseLeft, isEditing && styles.editableExpense]} 
+                onPress={() => isEditing && router.push({
+                    pathname: '/tabs/expenses/edit',
+                    params: { expenseId: expense.id }
+                })}
+            >
+                <View>
+                    <Text style={[styles.subcategory, expense.subcategory?.length > 10 && styles.subcategoryMultiline]}>
+                        {expense.subcategory}
+                    </Text>
+                    {expense.source === 'bank' && (
+                        <Text style={styles.sourceText}>Bank Transaction</Text>
+                    )}
+                    {expense.note && (
+                        <Text style={styles.noteText}>{expense.note}</Text>
+                    )}
+                </View>
+            </TouchableOpacity>
+
+            <View style={styles.amountBlock}>
+                <View style={styles.amountRow}>
+                    <Image source={require('@assets/icons/carrotcoinlist.png')} style={styles.carrotImage} />
+                    <Text style={styles.amountText}>{expense.amount}</Text>
+                </View>
+                <Text style={styles.carrotCoinText}>CarrotCoins</Text>
+            </View>
+        </View>
+    );
+};
 
 export default function OverviewListScreen() {
     const [expensesByDate, setExpensesByDate] = useState<Record<string, Expense[]>>({});
@@ -45,118 +86,83 @@ export default function OverviewListScreen() {
         );
     }, []);
 
-    // Set up real-time listener with proper cleanup
+    // Memoize the period calculation
+    const currentPeriodTitle = useMemo(() => {
+        const now = new Date();
+        const month = now.getMonth() + periodOffset;
+        const year = now.getFullYear() + Math.floor(month / 12);
+        const adjustedMonth = ((month % 12) + 12) % 12;
+        return new Date(year, adjustedMonth, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+    }, [periodOffset]);
+
+    // Memoize the expense data processing
+    const expenseData = useMemo(() => {
+        return Object.entries(expensesByDate)
+            .sort(([dateA], [dateB]) => new Date(dateB).getTime() - new Date(dateA).getTime());
+    }, [expensesByDate]);
+
+    // Set up real-time listener with proper cleanup and error handling
     useEffect(() => {
         if (!expensesQuery) return;
 
-        const unsubscribe = onSnapshot(expensesQuery, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Expense[];
-            setAllExpenses(data);
-        }, (error) => {
-            console.error('Error listening to expenses:', error);
-        });
+        let isMounted = true;
+        const unsubscribe = onSnapshot(expensesQuery, 
+            (snapshot) => {
+                if (!isMounted) return;
+                
+                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Expense[];
+                setAllExpenses(data);
+            }, 
+            (error) => {
+                console.error('Error listening to expenses:', error);
+                // Implement retry logic or show error to user
+            }
+        );
 
-        return () => unsubscribe();
+        return () => {
+            isMounted = false;
+            unsubscribe();
+        };
     }, [expensesQuery]);
 
-    // Memoize the processExpenses function
-    const processExpenses = useCallback(() => {
-        if (!allExpenses.length) return;
-
-        const currentDate = new Date();
-        const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + periodOffset, 1);
-        const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + periodOffset + 1, 0);
-
-        // Filter expenses for the selected month
-        const filteredExpenses = allExpenses.filter(exp => {
-            const expDate = new Date(exp.date);
-            return expDate >= firstDayOfMonth && expDate <= lastDayOfMonth;
-        });
-
-        const grouped: Record<string, Expense[]> = {};
-        let total = 0;
-
-        filteredExpenses.forEach(exp => {
-            const date = new Date(exp.date).toLocaleDateString('en-US', {
-                month: 'long', day: 'numeric'
-            });
-            if (!grouped[date]) grouped[date] = [];
-            grouped[date].push(exp);
-            total += parseFloat(exp.amount?.toString() || '0');
-        });
-
-        setExpensesByDate(grouped);
-        setTotalCarrotCoins(total);
-    }, [allExpenses, periodOffset]);
-
-    // Memoize getPeriodTitle
-    const currentPeriodTitle = useMemo(() => {
-        const currentDate = new Date();
-        const targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + periodOffset, 1);
-        const startDate = targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        const lastDay = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
-        const endDate = lastDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        return `${startDate} - ${endDate}`;
-    }, [periodOffset]);
-
+    // Process expenses when they change
     useEffect(() => {
+        const processExpenses = () => {
+            const grouped = allExpenses.reduce((acc, expense) => {
+                const date = new Date(expense.date).toLocaleDateString();
+                if (!acc[date]) acc[date] = [];
+                acc[date].push(expense);
+                return acc;
+            }, {} as Record<string, Expense[]>);
+
+            setExpensesByDate(grouped);
+            
+            // Calculate total carrot coins
+            const total = allExpenses.reduce((sum, expense) => {
+                return sum + (expense.carrotCoins || 0);
+            }, 0);
+            setTotalCarrotCoins(total);
+        };
+
         processExpenses();
-    }, [processExpenses]);
+    }, [allExpenses]);
 
-    // Memoize categoryIcons to prevent recreation on each render
-    const categoryIcons = useMemo(() => {
-        return categories.reduce((acc, cat) => {
-            cat.subcategories.forEach(sub => {
-                acc[sub.toLowerCase()] = cat.icon;
-            });
-            return acc;
-        }, {} as Record<string, any>);
-    }, []);
-
-    // Memoize the FlatList data to prevent unnecessary re-renders
-    const expenseData = useMemo(() => Object.entries(expensesByDate), [expensesByDate]);
-
-    // Memoize the renderItem function to prevent unnecessary re-renders
-    const renderExpenseItem = useCallback(({ item: [date, expenses] }: { item: [string, Expense[]] }) => (
-        <View style={styles.dateGroup}>
-            <Text style={styles.dateTitle}>{date}</Text>
-            {expenses.map((exp: Expense) => {
-                const icon = categoryIcons[exp.subcategory?.toLowerCase()] || require('@assets/icons/default.png');
-                return (
-                    <View key={exp.id} style={styles.expenseBox}>
-                        <TouchableOpacity 
-                            style={[styles.expenseLeft, isEditing && styles.editableExpense]} 
-                            onPress={() => isEditing && router.push({
-                                pathname: '/tabs/expenses/edit',
-                                params: { expenseId: exp.id }
-                            })}
-                        >
-                            <Image source={icon} style={styles.icon} />
-                            <View>
-                                <Text style={[styles.subcategory, exp.subcategory?.length > 10 && styles.subcategoryMultiline]}>
-                                    {exp.subcategory}
-                                </Text>
-                                {exp.source === 'bank' && (
-                                    <Text style={styles.sourceText}>Bank Transaction</Text>
-                                )}
-                                {exp.note && (
-                                    <Text style={styles.noteText}>{exp.note}</Text>
-                                )}
-                            </View>
-                        </TouchableOpacity>
-
-                        <View style={styles.amountBlock}>
-                            <View style={styles.amountRow}>
-                                <Image source={require('@assets/icons/carrotcoinlist.png')} style={styles.carrotImage} />
-                                <Text style={styles.amountText}>{exp.amount}</Text>
-                            </View>
-                            <Text style={styles.carrotCoinText}>CarrotCoins</Text>
-                        </View>
-                    </View>
-                );
-            })}
-        </View>
-    ), [categoryIcons, isEditing, router]);
+    // Memoize the render item function
+    const renderExpenseItem = useCallback(({ item: [date, expenses] }: { item: [string, Expense[]] }) => {
+        return (
+            <View style={styles.dateGroup}>
+                <Text style={styles.dateTitle}>{date}</Text>
+                {expenses.map((expense) => (
+                    <ExpenseItem
+                        key={expense.id}
+                        expense={expense}
+                        isEditing={isEditing}
+                        onDelete={handleDeleteExpense}
+                    />
+                ))}
+            </View>
+        );
+    }, [isEditing]);
 
     const fetchBudget = async (budgetId: string) => {
         if (!budgetId) return;
@@ -182,12 +188,24 @@ export default function OverviewListScreen() {
         setPeriodOffset(0); // Reset to current period when budget changes
     };
 
+    const handleDeleteExpense = async (id: string) => {
+        try {
+            await deleteDoc(doc(db, 'expenses', id));
+        } catch (error) {
+            console.error('Error deleting expense:', error);
+            Alert.alert('Error', 'Failed to delete expense. Please try again.');
+        }
+    };
+
     return (
         <ImageBackground source={bg} resizeMode="cover" style={styles.container}>
             <OverviewHeader />
             <View style={styles.fixedHeader}>
                 <View style={styles.topRow}>
-                    <TouchableOpacity onPress={() => setIsEditing((prev) => !prev)} style={styles.editButton}>
+                    <TouchableOpacity 
+                        onPress={() => setIsEditing((prev) => !prev)} 
+                        style={styles.editButton}
+                    >
                         <Feather name={isEditing ? 'check' : 'edit'} size={22} color="#91483c" />
                     </TouchableOpacity>
                 </View>
@@ -223,6 +241,9 @@ export default function OverviewListScreen() {
                 initialNumToRender={10}
                 maxToRenderPerBatch={10}
                 windowSize={5}
+                removeClippedSubviews={true}
+                updateCellsBatchingPeriod={50}
+                onEndReachedThreshold={0.5}
             />
 
             <View style={styles.addBtnWrapper}>

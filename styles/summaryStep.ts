@@ -1,11 +1,14 @@
 import { StyleSheet } from 'react-native';
 
 export default StyleSheet.create({
+  wrapper: {
+    flex: 1,
+  },
   container: {
     flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 50,
-    paddingBottom: 80,
+    paddingBottom: 100,
   },
   title: {
     fontSize: 40,
@@ -70,6 +73,7 @@ export default StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 40,
     gap: 16,
+    marginBottom: 20,
   },
   button: {
     flex: 1,

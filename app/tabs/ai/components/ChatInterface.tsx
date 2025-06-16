@@ -115,6 +115,64 @@ const generateUniqueId = () => {
     return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 };
 
+// Utility: Parse natural language date phrases (EN/RO)
+function parseNaturalLanguageDate(text: string): string | null {
+    const now = new Date();
+    const lower = text.toLowerCase().trim();
+    // English
+    if (lower === 'today' || lower === 'azi') return now.toISOString().split('T')[0];
+    if (lower === 'yesterday' || lower === 'ieri') {
+        const d = new Date(now);
+        d.setDate(d.getDate() - 1);
+        return d.toISOString().split('T')[0];
+    }
+    // X days ago
+    let match = lower.match(/(acum |)(\d+) zile?( ago|)/);
+    if (!match) match = lower.match(/(\d+) days? ago/);
+    if (match) {
+        const days = parseInt(match[2] || match[1], 10);
+        const d = new Date(now);
+        d.setDate(d.getDate() - days);
+        return d.toISOString().split('T')[0];
+    }
+    // Last week
+    if (lower === 'last week' || lower === 'saptamana trecuta') {
+        const d = new Date(now);
+        d.setDate(d.getDate() - 7);
+        return d.toISOString().split('T')[0];
+    }
+    // Weekdays (EN/RO)
+    const weekdays = [
+        { en: 'monday', ro: 'luni', idx: 1 },
+        { en: 'tuesday', ro: 'marti', idx: 2 },
+        { en: 'wednesday', ro: 'miercuri', idx: 3 },
+        { en: 'thursday', ro: 'joi', idx: 4 },
+        { en: 'friday', ro: 'vineri', idx: 5 },
+        { en: 'saturday', ro: 'sambata', idx: 6 },
+        { en: 'sunday', ro: 'duminica', idx: 0 },
+    ];
+    for (const day of weekdays) {
+        if (lower === day.en || lower === day.ro) {
+            const d = new Date(now);
+            const diff = (d.getDay() + 7 - day.idx) % 7 || 7;
+            d.setDate(d.getDate() - diff);
+            return d.toISOString().split('T')[0];
+        }
+    }
+    // Specific date: dd/mm/yyyy or yyyy-mm-dd
+    match = lower.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+    if (match) {
+        const [_, day, month, year] = match;
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    match = lower.match(/(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+    if (match) {
+        const [_, year, month, day] = match;
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    return null;
+}
+
 export default function ChatInterface(): JSX.Element {
     const router = useRouter();
     const { ocrData, setOCRData } = useOCR();
@@ -149,6 +207,12 @@ export default function ChatInterface(): JSX.Element {
     useEffect(() => {
         OCRDataProvider.init(setOCRData);
     }, [setOCRData]);
+
+    // Initialize Speech Recognition on mount
+    useEffect(() => {
+        initializeSpeechRecognition();
+        console.log('Speech recognition initialized on mount');
+    }, []);
 
     // Handle OCR data when it changes
     useEffect(() => {
@@ -242,6 +306,7 @@ Is this correct?`, false);
     };
 
     const startListening = () => {
+        console.log('startListening called');
         if (!checkSpeechRecognitionSupport()) {
             Alert.alert(
                 'Funcție indisponibilă',
@@ -704,56 +769,26 @@ Is this correct?`, false);
     };
 
     const handleFollowUpInput = async (text: string) => {
-        console.log('🔄 Handling follow-up input:', { text, awaitingInput, currentParsing });
-        let handled = false;
+        if (!currentParsing) return;
+
         let updatedParsing = { ...currentParsing };
+        let handled = false;
 
-        if (!updatedParsing) {
-            updatedParsing = {};
+        // Handle amount input
+        if (awaitingInput === 'amount') {
+            const amountMatch = text.match(/(\d+(?:[.,]\d{1,2})?)/);
+            if (amountMatch?.[1]) {
+                updatedParsing.amount = parseFloat(amountMatch[1].replace(',', '.'));
+                handled = true;
+            }
         }
-
-        switch (awaitingInput) {
-            case 'amount':
-                const amountMatch = text.match(/(\d+(?:[.,]\d{1,2})?)/);
-                if (amountMatch) {
-                    updatedParsing.amount = parseFloat(amountMatch[1].replace(',', '.'));
-                    handled = true;
-                }
-                break;
-
-            case 'date':
-                let parsedDate = parseRelativeDate(text) || parseAbsoluteDate(text);
-                if (!parsedDate && text.toLowerCase().includes('today')) {
-                    parsedDate = new Date().toISOString().split('T')[0];
-                }
-                if (parsedDate) {
-                    updatedParsing.date = parsedDate;
-                    handled = true;
-                }
-                break;
-
-            case 'category':
-                const categoryMatch = categories.find(cat => 
-                    text.toLowerCase().includes(cat.label.toLowerCase())
-                );
-                if (categoryMatch) {
-                    updatedParsing.category = categoryMatch.label;
-                    handled = true;
-                }
-                break;
-
-            case 'subcategory':
-                const category = categories.find(cat => cat.label === updatedParsing.category);
-                if (category) {
-                    const subcategoryMatch = category.subcategories.find(sub =>
-                        text.toLowerCase().includes(sub.toLowerCase())
-                    );
-                    if (subcategoryMatch) {
-                        updatedParsing.subcategory = subcategoryMatch;
-                        handled = true;
-                    }
-                }
-                break;
+        // Handle date input
+        else if (awaitingInput === 'date') {
+            const parsed = parseNaturalLanguageDate(text);
+            if (parsed) {
+                updatedParsing.date = parsed;
+                handled = true;
+            }
         }
 
         if (handled) {
@@ -761,48 +796,41 @@ Is this correct?`, false);
             setCurrentParsing(updatedParsing);
             setAwaitingInput(null);
             
-            // Ensure we have a date
-            if (!updatedParsing.date) {
-                updatedParsing.date = new Date().toISOString().split('T')[0];
-                console.log('📅 Added default date:', updatedParsing.date);
-            }
+            // Only show updated expense details if we have all required fields
+            if (isValidExpense(updatedParsing)) {
+                addMessage(
+                    `Here's the updated expense:\n` +
+                    `Amount: ${updatedParsing.amount} RON\n` +
+                    `Category: ${updatedParsing.category}\n` +
+                    `Subcategory: ${updatedParsing.subcategory}\n` +
+                    `Date: ${updatedParsing.date}\n\n` +
+                    `Is this correct now?`,
+                    false
+                );
 
-            // Ensure we have a note
-            if (!updatedParsing.note) {
-                updatedParsing.note = updatedParsing.subcategory || text;
-                console.log('📝 Added default note:', updatedParsing.note);
-            }
-
-            // Show updated expense details
-            addMessage(
-                `Here's the updated expense:\n` +
-                `Amount: ${updatedParsing.amount} RON\n` +
-                `Category: ${updatedParsing.category}\n` +
-                `Subcategory: ${updatedParsing.subcategory}\n` +
-                `Date: ${updatedParsing.date}\n\n` +
-                `Is this correct now?`,
-                false
-            );
-
-            setQuickReplies([
-                {
-                    text: 'Yes, save it',
-                    action: () => {
-                        if (isValidExpense(updatedParsing)) {
-                            saveExpense(updatedParsing as ParsedExpense);
-                        } else {
-                            addMessage("Some information is still missing. Please provide all required details.", false);
-                            generateFollowUpQuestions(updatedParsing);
-                        }
+                setQuickReplies([
+                    {
+                        text: 'Yes, save it',
+                        action: () => saveExpense(updatedParsing as ParsedExpense)
+                    },
+                    {
+                        text: 'No, needs more changes',
+                        action: () => handleExpenseCorrection(updatedParsing as ParsedExpense)
                     }
-                },
-                {
-                    text: 'No, needs more changes',
-                    action: () => handleExpenseCorrection(updatedParsing as ParsedExpense)
-                }
-            ]);
+                ]);
+            } else {
+                // Only ask for missing fields
+                const missingFields = [];
+                if (!updatedParsing.amount) missingFields.push('amount');
+                if (!updatedParsing.category) missingFields.push('category');
+                if (!updatedParsing.subcategory) missingFields.push('subcategory');
+                if (!updatedParsing.date) missingFields.push('date');
+
+                addMessage(`Please provide the following missing information: ${missingFields.join(', ')}`, false);
+                generateFollowUpQuestions(updatedParsing);
+            }
         } else {
-            generateFollowUpQuestions(updatedParsing);
+            addMessage("I couldn't understand that. Please try again or choose from the options above.", false);
         }
     };
 
@@ -1153,6 +1181,10 @@ Is this correct?`, false);
                 action: () => {
                     addMessage("What's the correct amount?", false);
                     setAwaitingInput('amount');
+                    setCorrectionState({
+                        originalExpense: expense,
+                        correctedFields: new Set(['amount'])
+                    });
                 }
             },
             {
@@ -1163,6 +1195,10 @@ Is this correct?`, false);
                         text: cat.label,
                         action: () => {
                             const updatedExpense = { ...expense, category: cat.label };
+                            setCorrectionState({
+                                originalExpense: updatedExpense,
+                                correctedFields: new Set(['category'])
+                            });
                             setPendingExpense(updatedExpense);
                             askForSubcategory(cat.label, cat.subcategories);
                         }
@@ -1174,6 +1210,10 @@ Is this correct?`, false);
                 action: () => {
                     addMessage("What's the correct date? You can say 'today', 'yesterday', or specify a date.", false);
                     setAwaitingInput('date');
+                    setCorrectionState({
+                        originalExpense: expense,
+                        correctedFields: new Set(['date'])
+                    });
                 }
             }
         ]);
@@ -1354,12 +1394,13 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     quickRepliesContainer: {
-        maxHeight: 150,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+        maxHeight: 70,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
     },
     quickRepliesWrapper: {
-        flexDirection: 'column',
+        flexDirection: 'row',
+        flexWrap: 'wrap',
         gap: 8,
     },
     quickReplyButton: {

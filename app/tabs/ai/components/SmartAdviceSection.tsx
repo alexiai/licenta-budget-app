@@ -37,6 +37,51 @@ export interface SpendingAnalysis {
         amount: number;
         change: number;
     }>;
+    spendingPatterns: {
+        essentialVsFlexible: {
+            essential: number;
+            flexible: number;
+        };
+        weekdayVsWeekend: {
+            weekday: number;
+            weekend: number;
+        };
+        recentSpikes: Array<{
+            category: string;
+            amount: number;
+            date: string;
+        }>;
+        recurringExpenses: Array<{
+            category: string;
+            amount: number;
+            frequency: string;
+        }>;
+        categoryFrequency: Array<{
+            category: string;
+            frequency: number;
+        }>;
+        timeBasedSpending: {
+            morning: number;
+            afternoon: number;
+            evening: number;
+            night: number;
+        };
+        locationBasedSpending: Record<string, number>;
+    };
+    weeklyStats: {
+        currentWeek: number;
+        lastWeek: number;
+        trend: 'increasing' | 'decreasing' | 'stable';
+        topSpendingDay: {
+            day: string;
+            amount: number;
+        };
+    };
+    averageDailySpending: number;
+    seasonalContext: {
+        isHolidaySeason: boolean;
+        currentSeason: string;
+    };
 }
 
 interface SmartAdviceSectionProps {

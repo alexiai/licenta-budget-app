@@ -87,6 +87,7 @@ export default function BudgetOnboarding() {
     };
 
     const handleCancel = () => {
+        console.log('[Onboarding] Cancel button pressed');
         Alert.alert(
             'Cancel Budget Creation',
             'Are you sure you want to cancel? All progress will be lost.',
@@ -94,12 +95,35 @@ export default function BudgetOnboarding() {
                 {
                     text: 'No, Continue',
                     style: 'cancel',
+                    onPress: () => {
+                        console.log('[Onboarding] Cancel aborted by user');
+                    }
                 },
                 {
                     text: 'Yes, Cancel',
                     style: 'destructive',
-                    onPress: () => router.replace('/tabs/budget'),
-                },
+                    onPress: () => {
+                        console.log('[Onboarding] Cancel confirmed');
+                        (async () => {
+                            try {
+                                await AsyncStorage.removeItem('hasJustCreatedBudget');
+                                console.log('[Onboarding] Removed hasJustCreatedBudget from AsyncStorage');
+                                setFormData({
+                                    name: '',
+                                    period: 'monthly',
+                                    startDay: '1',
+                                    incomes: [],
+                                    categories: [],
+                                });
+                                console.log('[Onboarding] Reset formData state');
+                                router.replace('/tabs/budget');
+                                console.log('[Onboarding] Navigated to /tabs/budget');
+                            } catch (err) {
+                                console.error('[Onboarding] Error during cancel:', err);
+                            }
+                        })();
+                    }
+                }
             ]
         );
     };

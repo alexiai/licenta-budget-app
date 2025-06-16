@@ -139,6 +139,23 @@ export default function EditBudget({ categories: initialCategories, incomes: ini
     const screenWidth = Dimensions.get('window').width;
     const totalValue = chartData.reduce((sum, e) => sum + e.value, 0);
 
+    // Compute used and unused categories
+    const usedCategoryNames = categories.map(cat => cat.name);
+    const allCategoryNames = Object.keys(predefinedCategories).map(key => {
+        // Map back to display name if needed
+        const entry = Object.entries(categoryNameToKey).find(([display, k]) => k === key);
+        return entry ? entry[0] : key.charAt(0).toUpperCase() + key.slice(1);
+    });
+    const unusedCategoryNames = allCategoryNames.filter(name => !usedCategoryNames.includes(name));
+
+    // Handler to add a new category
+    const handleAddCategory = async (name) => {
+        const key = categoryNameToKey[name] || name.toLowerCase();
+        const subcats = (predefinedCategories[key] || []).map(sub => ({ name: sub, amount: '0', isOther: false }));
+        const updated = [...categories, { name, subcategories: subcats }];
+        await updateAll(updated, incomes);
+    };
+
     return (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 80 }}>
             <View style={budgetStyles.card}>
@@ -256,7 +273,7 @@ export default function EditBudget({ categories: initialCategories, incomes: ini
                 </View>
             )}
 
-            {categories.map((cat, i) => {
+            {categories.filter(cat => (cat.subcategories && cat.subcategories.length > 0)).map((cat, i) => {
                 const key = categoryNameToKey[cat.name] || 'other';
                 const used = cat.subcategories.map((s) => s.name);
                 const available = (predefinedCategories[key] || []).filter((s) => !used.includes(s));
@@ -342,6 +359,31 @@ export default function EditBudget({ categories: initialCategories, incomes: ini
                     </View>
                 );
             })}
+
+            {/* +Add Category Button */}
+            {unusedCategoryNames.length > 0 && (
+                <View style={{ marginHorizontal: 20, marginTop: 20 }}>
+                    <TouchableOpacity
+                        onPress={() => setOpenDropdown(openDropdown === 'addCategory' ? null : 'addCategory')}
+                        style={styles.addSubBtn}
+                    >
+                        <Text style={styles.addSubText}>+ Add Category</Text>
+                    </TouchableOpacity>
+                    {openDropdown === 'addCategory' && (
+                        <View style={styles.subGrid}>
+                            {unusedCategoryNames.map((name, idx) => (
+                                <TouchableOpacity
+                                    key={idx}
+                                    onPress={() => { handleAddCategory(name); setOpenDropdown(null); }}
+                                    style={styles.subPill}
+                                >
+                                    <Text style={styles.subPillText}>{name}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
+                </View>
+            )}
 
         </ScrollView>
     );

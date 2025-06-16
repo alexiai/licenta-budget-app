@@ -160,7 +160,7 @@ export default function BudgetScreen() {
                 />
             ) : (
                 <FlatList
-                    data={budgetData.categories}
+                    data={budgetData.categories.filter((cat: Category) => cat.subcategories && cat.subcategories.length > 0)}
                     keyExtractor={(item: Category, index: number) => `cat-${index}`}
                     renderItem={({ item: cat, index }: { item: Category; index: number }) => (
                         <View>

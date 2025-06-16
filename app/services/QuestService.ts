@@ -1,6 +1,6 @@
 import { collection, doc, getDoc, setDoc, updateDoc, query, where, getDocs, runTransaction, writeBatch, Timestamp, DocumentReference } from 'firebase/firestore';
 import { db } from '@lib/firebase';
-import { SpendingAnalysis } from '@tabs/ai/components/SmartAdviceSection';
+import { SpendingAnalysis } from '@tabs/ai/components/types';
 import { UserProgress, UserQuest } from '@lib/types';
 import { useDataFetching } from '@lib/hooks/useDataFetching';
 
@@ -22,6 +22,19 @@ export interface Badge {
     icon: string;
     rarity: 'common' | 'rare' | 'epic' | 'legendary';
     unlockedAt: Date;
+}
+
+interface Quest {
+    id: string;
+    title: string;
+    description: string;
+    type: 'daily' | 'weekly';
+    reward: number;
+    progress: number;
+    target: number;
+    completed: boolean;
+    createdAt: string;
+    expiresAt: string;
 }
 
 class QuestService {
@@ -122,6 +135,12 @@ class QuestService {
     }
 
     async generateQuests(userId: string, analysis: SpendingAnalysis): Promise<UserQuest[]> {
+        console.log('[QuestService] generateQuests received analysis:', analysis);
+        if (analysis) {
+            console.log('[QuestService] analysis.totalSpent type:', typeof analysis.totalSpent, analysis.totalSpent);
+            console.log('[QuestService] analysis.topCategories type:', Array.isArray(analysis.topCategories), analysis.topCategories);
+            console.log('[QuestService] analysis.categoryBreakdown:', analysis.categoryBreakdown);
+        }
         console.log('[QuestService] Generating quests for user:', userId);
         console.log('[QuestService] Analysis data:', analysis);
 
@@ -562,6 +581,264 @@ class QuestService {
             updatedAt: Timestamp.now()
         });
         console.log('[QuestService] Updated user progress successfully');
+    }
+
+    private generateDailyQuests(analysis: SpendingAnalysis): Quest[] {
+        const quests: Quest[] = [];
+        const { spendingPatterns, weeklyStats, averageDailySpending } = analysis;
+
+        // Basic daily quests
+        quests.push({
+            id: 'daily-login',
+            title: 'Daily Check-in',
+            description: 'Log in to track your expenses today',
+            type: 'daily',
+            reward: 5,
+            progress: 0,
+            target: 1,
+            completed: false,
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        });
+
+        // Spending limit quests
+        if (weeklyStats.trend === 'increasing') {
+            quests.push({
+                id: 'spending-control',
+                title: 'Spending Control',
+                description: 'Keep your spending below your daily average',
+                type: 'daily',
+                reward: 10,
+                progress: 0,
+                target: 1,
+                completed: false,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            });
+        }
+
+        // Category-specific quests
+        const highSpendingCategories = analysis.topCategories.filter(cat => cat.percentage > 30);
+        highSpendingCategories.forEach(category => {
+            quests.push({
+                id: `reduce-${category.category}`,
+                title: `Reduce ${category.category} Spending`,
+                description: `Spend 20% less on ${category.category} today`,
+                type: 'daily',
+                reward: 15,
+                progress: 0,
+                target: 1,
+                completed: false,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            });
+        });
+
+        // New: Time-based quests
+        if (spendingPatterns.timeBasedSpending.evening > spendingPatterns.timeBasedSpending.morning * 2) {
+            quests.push({
+                id: 'morning-shopping',
+                title: 'Morning Shopper',
+                description: 'Make your purchases before 2 PM today',
+                type: 'daily',
+                reward: 8,
+                progress: 0,
+                target: 1,
+                completed: false,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            });
+        }
+
+        // New: Location-based quests
+        const locationSpending = spendingPatterns.locationBasedSpending;
+        const maxLocation = Object.entries(locationSpending).reduce((max, [loc, amount]) => 
+            amount > max.amount ? { location: loc, amount } : max, 
+            { location: '', amount: 0 }
+        );
+        if (maxLocation.amount > averageDailySpending * 3) {
+            quests.push({
+                id: 'alternative-location',
+                title: 'Try New Places',
+                description: `Make a purchase at a different location than ${maxLocation.location}`,
+                type: 'daily',
+                reward: 12,
+                progress: 0,
+                target: 1,
+                completed: false,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            });
+        }
+
+        // New: Category exploration quests
+        const unusedCategories = analysis.topCategories.filter(cat => cat.percentage < 5);
+        if (unusedCategories.length > 0) {
+            const randomCategory = unusedCategories[Math.floor(Math.random() * unusedCategories.length)];
+            quests.push({
+                id: `explore-${randomCategory.category}`,
+                title: `Explore ${randomCategory.category}`,
+                description: `Make a purchase in the ${randomCategory.category} category`,
+                type: 'daily',
+                reward: 10,
+                progress: 0,
+                target: 1,
+                completed: false,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            });
+        }
+
+        // New: Budget planning quests
+        if (weeklyStats.trend === 'increasing') {
+            quests.push({
+                id: 'budget-planning',
+                title: 'Budget Planner',
+                description: 'Review and adjust your budget for next week',
+                type: 'daily',
+                reward: 15,
+                progress: 0,
+                target: 1,
+                completed: false,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            });
+        }
+
+        // New: Savings quests
+        const potentialSavings = spendingPatterns.essentialVsFlexible.flexible * 0.2;
+        if (potentialSavings > 100) {
+            quests.push({
+                id: 'savings-challenge',
+                title: 'Savings Challenge',
+                description: 'Save at least 20% of your flexible spending today',
+                type: 'daily',
+                reward: 20,
+                progress: 0,
+                target: 1,
+                completed: false,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            });
+        }
+
+        // New: Category balance quests
+        const unbalancedCategories = analysis.topCategories.filter(cat => cat.percentage > 30);
+        if (unbalancedCategories.length > 1) {
+            quests.push({
+                id: 'category-balance',
+                title: 'Category Balance',
+                description: 'Make purchases in at least 3 different categories today',
+                type: 'daily',
+                reward: 15,
+                progress: 0,
+                target: 3,
+                completed: false,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            });
+        }
+
+        return quests;
+    }
+
+    private generateWeeklyQuests(analysis: SpendingAnalysis): Quest[] {
+        const quests: Quest[] = [];
+        const { spendingPatterns, weeklyStats } = analysis;
+
+        // Basic weekly quests
+        quests.push({
+            id: 'weekly-login',
+            title: 'Weekly Check-in',
+            description: 'Log in every day this week',
+            type: 'weekly',
+            reward: 20,
+            progress: 0,
+            target: 7,
+            completed: false,
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+
+        // New: Weekly spending pattern quests
+        if (spendingPatterns.weekdayVsWeekend.weekend > spendingPatterns.weekdayVsWeekend.weekday) {
+            quests.push({
+                id: 'weekend-savings',
+                title: 'Weekend Saver',
+                description: 'Keep weekend spending below weekday average',
+                type: 'weekly',
+                reward: 25,
+                progress: 0,
+                target: 1,
+                completed: false,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+        }
+
+        // New: Category mastery quests
+        const highSpendingCategories = analysis.topCategories.filter(cat => cat.percentage > 30);
+        highSpendingCategories.forEach(category => {
+            quests.push({
+                id: `master-${category.category}`,
+                title: `${category.category} Master`,
+                description: `Stay within budget for ${category.category} all week`,
+                type: 'weekly',
+                reward: 30,
+                progress: 0,
+                target: 7,
+                completed: false,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+        });
+
+        // New: Weekly savings challenge
+        const weeklySavingsTarget = weeklyStats.currentWeek * 0.2;
+        if (weeklySavingsTarget > 200) {
+            quests.push({
+                id: 'weekly-savings',
+                title: 'Weekly Savings Challenge',
+                description: `Save ${Math.round(weeklySavingsTarget)} RON this week`,
+                type: 'weekly',
+                reward: 40,
+                progress: 0,
+                target: Math.round(weeklySavingsTarget),
+                completed: false,
+                createdAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+        }
+
+        // New: Category exploration quest
+        quests.push({
+            id: 'category-explorer',
+            title: 'Category Explorer',
+            description: 'Make purchases in 5 different categories this week',
+            type: 'weekly',
+            reward: 35,
+            progress: 0,
+            target: 5,
+            completed: false,
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+
+        // New: Budget review quest
+        quests.push({
+            id: 'budget-review',
+            title: 'Budget Reviewer',
+            description: 'Review and adjust your budget at least twice this week',
+            type: 'weekly',
+            reward: 25,
+            progress: 0,
+            target: 2,
+            completed: false,
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+
+        return quests;
     }
 }
 

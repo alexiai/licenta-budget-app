@@ -1,0 +1,147 @@
+Gamification Architecture
+
+1. Firestore Structure
+---------------------
+The gamification data is stored in the users collection under each user's document:
+
+```typescript
+interface UserGamification {
+    carrotCoins: number;   // Virtual currency
+    level: number;         // Current level
+    xp: number;           // Accumulated experience
+    achievements: string[]; // Unlocked achievement IDs
+}
+```
+
+2. Quest System
+--------------
+a) Quest Types:
+- Daily Quests: Quick tasks (50-100 points)
+- Weekly Quests: Medium tasks (200-500 points)
+- Monthly Quests: Major goals (1000+ points)
+
+b) Quest Structure:
+```typescript
+interface UserQuest {
+    id: string;
+    userId: string;
+    title: string;
+    description: string;
+    type: 'daily' | 'weekly' | 'monthly' | 'achievement';
+    reward: number;
+    progress: number;
+    target: number;
+    status: 'active' | 'completed' | 'claimed' | 'failed' | 'locked';
+    category?: string;
+    startDate: Date;
+    endDate?: Date;
+    streak?: number;
+    level: number;
+    claimedAt?: Date;
+}
+```
+
+3. Level System
+--------------
+a) Level Progression:
+- Each level requires 1000 points
+- Level colors:
+  * 1-4: Green
+  * 5-9: Blue
+  * 10-14: Orange
+  * 15-19: Red
+  * 20+: Purple
+
+b) Level Rewards:
+- CarrotCoins earned per level
+- Badge unlocks
+- Special achievements
+
+4. Badge System
+--------------
+a) Badge Rarities:
+- Common: Basic achievements
+- Rare: Streak milestones
+- Epic: Special combinations
+- Legendary: Major milestones
+
+b) Badge Structure:
+```typescript
+interface Badge {
+    id: string;
+    name: string;
+    description: string;
+    emoji: string;
+    rarity: 'common' | 'rare' | 'epic' | 'legendary';
+    requirement: number;
+}
+```
+
+5. Reward System
+---------------
+a) CarrotCoins:
+- Earned through quest completion
+- Used for:
+  * Unlocking special features
+  * Customizing profile
+  * Purchasing premium content
+
+b) XP System:
+- Gained through:
+  * Completing quests
+  * Maintaining streaks
+  * Achieving milestones
+- Used for level progression
+
+6. User Progress Tracking
+------------------------
+```typescript
+interface UserProgress {
+    userId: string;
+    level: number;
+    totalPoints: number;
+    pointsToNextLevel: number;
+    questsCompleted: number;
+    currentStreak: number;
+    lastQuestDate?: Date;
+    badges: Badge[];
+    completedQuests: string[];
+}
+```
+
+7. Implementation Details
+------------------------
+a) Quest Generation:
+- Dynamic quest creation based on user behavior
+- Personalized difficulty levels
+- Category-specific challenges
+
+b) Progress Calculation:
+- Real-time XP tracking
+- Automatic level-up detection
+- Streak maintenance
+
+c) Reward Distribution:
+- Immediate rewards for quest completion
+- Streak bonuses
+- Level-up rewards
+
+8. Error Handling
+----------------
+a) Offline Support:
+- Local storage of progress
+- Sync when connection restored
+- Conflict resolution
+
+b) Data Validation:
+- Input sanitization
+- Progress verification
+- Reward validation
+
+9. Future Improvements
+---------------------
+- Additional quest types
+- Enhanced reward system
+- Social features
+- Leaderboards
+- Seasonal events 

@@ -315,9 +315,9 @@ export default StyleSheet.create({
 
     // Badge Section
     badgeSection: {
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        backgroundColor: '#FFF5D6',
         borderRadius: 20,
-        padding: 20,
+        padding: 16,
         marginHorizontal: 20,
         marginBottom: 16,
         elevation: 4,
@@ -327,7 +327,7 @@ export default StyleSheet.create({
         shadowRadius: 4,
     },
     badgeTitle: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
         color: '#91483C',
         marginBottom: 16,
@@ -352,32 +352,62 @@ export default StyleSheet.create({
         fontSize: 12,
         color: '#666',
         fontFamily: 'Fredoka',
-        marginTop: 2,
+        marginTop: 5,
     },
     earnedBadgesContainer: {
-        marginBottom: 20,
+        marginBottom: 2,
     },
     earnedBadgesTitle: {
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: 'bold',
         color: '#91483C',
-        marginBottom: 12,
+        marginLeft:13,
         fontFamily: 'Fredoka',
     },
     upcomingBadgesContainer: {
-        marginBottom: 20,
+        marginBottom: 2,
     },
     upcomingBadgesTitle: {
         fontSize: 16,
         fontWeight: 'bold',
         color: '#91483C',
-        marginBottom: 12,
+        marginBottom: 2,
         fontFamily: 'Fredoka',
     },
     badgeGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 12,
+        gap: 8,
+    },
+    badgeWallCompact: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        justifyContent: 'flex-start',
+    },
+    compactBadge: {
+        alignItems: 'center',
+        width: 50,
+        margin: 4,
+        padding: 7,
+        backgroundColor: 'transparent',
+    },
+    compactBadgeEmoji: {
+        fontSize: 27,
+    },
+    compactBadgeTitle: {
+        fontSize: 12,
+        color: '#91483C',
+        fontFamily: 'Fredoka',
+        textAlign: 'center',
+    },
+    showMoreBtn: {
+        color: '#d5790d',
+        fontFamily: 'Fredoka',
+        fontWeight: '600',
+        fontSize: 14,
+        textAlign: 'center',
+        marginTop: 8,
     },
     earnedBadge: {
         backgroundColor: '#FFF3E0',
@@ -399,7 +429,6 @@ export default StyleSheet.create({
     },
     badgeEmoji: {
         fontSize: 32,
-        marginBottom: 4,
     },
     unearnedEmoji: {
         opacity: 0.3,
@@ -427,7 +456,7 @@ export default StyleSheet.create({
     achievementHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 5,
         backgroundColor: '#FFF2D8',
         borderRadius: 16,
         padding: 16,
@@ -443,7 +472,7 @@ export default StyleSheet.create({
     achievementRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: 2,
     },
     achievementValue: {
         fontSize: 20,

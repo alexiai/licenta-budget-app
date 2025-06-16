@@ -1,14 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     ScrollView,
     Image,
-    Dimensions
+    Dimensions,
+    TouchableOpacity
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SpendingAnalysis } from './SmartAdviceSection';
+import { SpendingAnalysis } from './types';
 import { LinearGradient } from 'expo-linear-gradient';
 import statsImg from '@assets/decor/aiStats.png';
 
@@ -48,20 +49,28 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
         averageDailySpending
     } = analysis;
 
+    // Fallbacks for possibly missing fields
+    const safeTotalThisMonth = typeof totalThisMonth === 'number' ? totalThisMonth : 0;
+    const safeTotalLastMonth = typeof totalLastMonth === 'number' ? totalLastMonth : 0;
+    const safeDailyBreakdown = (weeklyStats && typeof weeklyStats.dailyBreakdown === 'object') ? weeklyStats.dailyBreakdown : {};
+    const safeAverageDailySpending = typeof averageDailySpending === 'number' ? averageDailySpending : 0;
+    const safeCurrentWeek = typeof weeklyStats.currentWeek === 'number' ? weeklyStats.currentWeek : 0;
+    const safeLastWeek = typeof weeklyStats.lastWeek === 'number' ? weeklyStats.lastWeek : 0;
+
     const screenWidth = Dimensions.get('window').width;
     const chartWidth = screenWidth - 64; // Accounting for padding
-    const maxDailyAmount = Math.max(...Object.values(weeklyStats.dailyBreakdown));
+    const maxDailyAmount = Math.max(1, ...Object.values(safeDailyBreakdown));
 
     const getBarWidth = (amount: number) => {
-        return (amount / maxDailyAmount) * (chartWidth - 100); // Leave space for labels
+        return (Number(amount) / maxDailyAmount) * (chartWidth - 100); // Leave space for labels
     };
 
     const getBarColor = (amount: number) => {
-        if (amount > averageDailySpending * 1.5) {
+        if (amount > safeAverageDailySpending * 1.5) {
             return ['#FF5252', '#FF8A80'] as [string, string];
-        } else if (amount > averageDailySpending * 1.2) {
+        } else if (amount > safeAverageDailySpending * 1.2) {
             return ['#FFA726', '#FFB74D'] as [string, string];
-        } else if (amount < averageDailySpending * 0.5) {
+        } else if (amount < safeAverageDailySpending * 0.5) {
             return ['#66BB6A', '#81C784'] as [string, string];
         } else {
             return ['#42A5F5', '#64B5F6'] as [string, string];
@@ -87,8 +96,8 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
     };
 
     const getMonthlyComparison = () => {
-        const difference = totalThisMonth - totalLastMonth;
-        const percentChange = ((difference / totalLastMonth) * 100);
+        const difference = safeTotalThisMonth - safeTotalLastMonth;
+        const percentChange = safeTotalLastMonth !== 0 ? ((difference / safeTotalLastMonth) * 100) : 0;
         const isIncrease = difference > 0;
 
         return {
@@ -99,6 +108,8 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
     };
 
     const monthlyComparison = getMonthlyComparison();
+
+    const [showBadgeDetails, setShowBadgeDetails] = useState(false);
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -118,7 +129,7 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
                 <View style={styles.weeklyOverview}>
                     <View style={styles.overviewItem}>
                         <Text style={styles.overviewLabel}>This Week</Text>
-                        <Text style={styles.overviewAmount}>{formatAmount(weeklyStats.currentWeek)} RON</Text>
+                        <Text style={styles.overviewAmount}>{formatAmount(safeCurrentWeek)} RON</Text>
                     </View>
                     <View style={styles.trendIndicator}>
                         <Text style={styles.trendIcon}>{getTrendIcon(weeklyStats.trend)}</Text>
@@ -131,7 +142,7 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
                     </View>
                     <View style={styles.overviewItem}>
                         <Text style={styles.overviewLabel}>Last Week</Text>
-                        <Text style={styles.overviewAmount}>{formatAmount(weeklyStats.lastWeek)} RON</Text>
+                        <Text style={styles.overviewAmount}>{formatAmount(safeLastWeek)} RON</Text>
                     </View>
                 </View>
             </View>
@@ -141,10 +152,10 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
                 <Text style={styles.cardTitle}>Daily Breakdown</Text>
                 <Text style={styles.cardSubtitle}>Compare your daily spending with your average</Text>
                 <View style={styles.barChart}>
-                    {Object.entries(weeklyStats.dailyBreakdown).map(([day, amount]) => {
-                        const percentOfAverage = (amount / averageDailySpending) * 100;
+                    {Object.entries(safeDailyBreakdown).map(([day, amount]) => {
+                        const percentOfAverage = safeAverageDailySpending ? (Number(amount) / safeAverageDailySpending) * 100 : 0;
                         const status = percentOfAverage > 120 ? 'high' : percentOfAverage < 80 ? 'low' : 'normal';
-                        const barColor = getBarColor(amount);
+                        const barColor = getBarColor(Number(amount));
                         
                         return (
                             <View key={day} style={styles.barRow}>
@@ -154,11 +165,11 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
                                         colors={barColor}
                                         start={{ x: 0, y: 0 }}
                                         end={{ x: 1, y: 0 }}
-                                        style={[styles.bar, { width: getBarWidth(amount) }]}
+                                        style={[styles.bar, { width: getBarWidth(Number(amount)) }]}
                                     />
                                 </View>
                                 <View style={styles.barInfo}>
-                                    <Text style={styles.barAmount}>{formatAmount(amount)}</Text>
+                                    <Text style={styles.barAmount}>{formatAmount(Number(amount))}</Text>
                                     <Text style={[styles.barStatus, styles[`barStatus${status}`]]}>
                                         {Math.round(percentOfAverage)}%
                                     </Text>
@@ -170,15 +181,15 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
                 <View style={styles.legendContainer}>
                     <View style={styles.legendItem}>
                         <View style={[styles.legendDot, { backgroundColor: '#FF5252' }]} />
-                        <Text style={styles.legendText}>Above Average ({'>'}120%)</Text>
+                        <Text style={styles.legendText}>Above Average</Text>
                     </View>
                     <View style={styles.legendItem}>
                         <View style={[styles.legendDot, { backgroundColor: '#42A5F5' }]} />
-                        <Text style={styles.legendText}>Normal (80-120%)</Text>
+                        <Text style={styles.legendText}>Normal</Text>
                     </View>
                     <View style={styles.legendItem}>
                         <View style={[styles.legendDot, { backgroundColor: '#66BB6A' }]} />
-                        <Text style={styles.legendText}>Below Average ({'<'}80%)</Text>
+                        <Text style={styles.legendText}>Below Average</Text>
                     </View>
                 </View>
             </View>
@@ -189,7 +200,7 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
                 <View style={styles.monthlyComparison}>
                     <View style={styles.monthlyItem}>
                         <Text style={styles.monthlyLabel}>This Month</Text>
-                        <Text style={styles.monthlyAmount}>{formatAmount(totalThisMonth)} RON</Text>
+                        <Text style={styles.monthlyAmount}>{formatAmount(safeTotalThisMonth)} RON</Text>
                     </View>
                     <View style={[styles.monthlyTrend, { backgroundColor: monthlyComparison.color + '20' }]}>
                         <Text style={styles.monthlyTrendIcon}>{monthlyComparison.icon}</Text>
@@ -200,7 +211,7 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
                 </View>
                 <View style={styles.averageContainer}>
                     <Text style={styles.averageLabel}>Daily Average:</Text>
-                    <Text style={styles.averageAmount}>{formatAmount(averageDailySpending)} RON</Text>
+                    <Text style={styles.averageAmount}>{formatAmount(safeAverageDailySpending)} RON</Text>
                 </View>
             </View>
 
@@ -211,20 +222,20 @@ export default function WeeklyStatsCard({ analysis }: WeeklyStatsCardProps): JSX
                     <View style={styles.distributionItem}>
                         <Text style={styles.distributionLabel}>Essential</Text>
                         <Text style={styles.distributionAmount}>
-                            {formatAmount(spendingPatterns.essentialVsFlexible.essential)} RON
+                            {formatAmount(Number(spendingPatterns.essentialVsFlexible.essential))} RON
                         </Text>
                         <Text style={styles.distributionPercentage}>
-                            {Math.round((spendingPatterns.essentialVsFlexible.essential / totalThisMonth) * 100)}%
+                            {safeTotalThisMonth ? Math.round((Number(spendingPatterns.essentialVsFlexible.essential) / safeTotalThisMonth) * 100) : 0}%
                         </Text>
                     </View>
                     <View style={styles.distributionDivider} />
                     <View style={styles.distributionItem}>
                         <Text style={styles.distributionLabel}>Flexible</Text>
                         <Text style={styles.distributionAmount}>
-                            {formatAmount(spendingPatterns.essentialVsFlexible.flexible)} RON
+                            {formatAmount(Number(spendingPatterns.essentialVsFlexible.flexible))} RON
                         </Text>
                         <Text style={styles.distributionPercentage}>
-                            {Math.round((spendingPatterns.essentialVsFlexible.flexible / totalThisMonth) * 100)}%
+                            {safeTotalThisMonth ? Math.round((Number(spendingPatterns.essentialVsFlexible.flexible) / safeTotalThisMonth) * 100) : 0}%
                         </Text>
                     </View>
                 </View>
@@ -491,13 +502,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     legendDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        marginRight: 8,
+        width: 10,
+        height: 10,
+        borderRadius: 4,
+        marginRight: 6,
     },
     legendText: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#666666',
         fontFamily: 'Fredoka',
     },

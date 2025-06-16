@@ -16,6 +16,7 @@ import { SpendingAnalysis, ExpenseData } from './components/SmartAdviceSection';
 import UnusedCategoriesCard from './components/UnusedCategoriesCard';
 import WeeklyStatsCard from './components/WeeklyStatsCard';
 import MiniQuestsCard from './components/MiniQuestsCard';
+import { generateSpendingAnalysis } from './components/analysisUtils';
 
 type TabType = 'tips' | 'categories' | 'stats' | 'quests';
 
@@ -127,6 +128,12 @@ export default function AiScreen(): JSX.Element {
         router.push('/tabs/ai/chatbox');
     };
 
+    const getSafeAnalysis = () => {
+        if (analysis) return analysis;
+        // Fallback: show all categories as unused
+        return generateSpendingAnalysis([]);
+    };
+
     if (!auth.currentUser) {
         return (
             <ImageBackground source={bg} style={styles.container} resizeMode="cover">
@@ -197,13 +204,13 @@ export default function AiScreen(): JSX.Element {
             case 'categories':
                 return (
                     <UnusedCategoriesCard 
-                        analysis={analysis}
+                        analysis={getSafeAnalysis()}
                     />
                 );
             case 'stats':
                 return (
                     <WeeklyStatsCard 
-                        analysis={analysis}
+                        analysis={getSafeAnalysis()}
                     />
                 );
             case 'quests':

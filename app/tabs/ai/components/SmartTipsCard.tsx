@@ -8,7 +8,7 @@ import {
     TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SpendingAnalysis } from './SmartAdviceSection';
+import { SpendingAnalysis } from './types';
 import { LinearGradient } from 'expo-linear-gradient';
 import tipsImg from '@assets/decor/aiTips.png';
 import { useRouter } from 'expo-router';
@@ -26,7 +26,7 @@ interface Tip {
 }
 
 interface SmartTipsCardProps {
-    analysis: SpendingAnalysis | null;
+    analysis?: SpendingAnalysis | null;
     onUpdateBudget?: (category?: string) => void;
     onOpenChat?: () => void;
 }
@@ -50,30 +50,24 @@ export default function SmartTipsCard({ analysis, onUpdateBudget, onOpenChat }: 
 
     const generateSmartTips = (): Tip[] => {
         const tips: Tip[] = [];
-        const {
-            topCategories,
-            spendingPatterns,
-            weeklyStats,
-            averageDailySpending,
-            seasonalContext
-        } = analysis;
+        const analysisSafe = analysis || {};
 
         // High-impact spending pattern tips
-        if (spendingPatterns.essentialVsFlexible.flexible > spendingPatterns.essentialVsFlexible.essential * 1.5) {
+        if (analysisSafe.spendingPatterns?.essentialVsFlexible?.flexible > (analysisSafe.spendingPatterns?.essentialVsFlexible?.essential || 0) * 1.5) {
             tips.push({
                 id: 'flexible-spending',
                 title: 'High Flexible Spending Alert',
-                description: `Your flexible spending (${spendingPatterns.essentialVsFlexible.flexible} RON) is significantly higher than essential spending. Consider reallocating some of this to savings.`,
+                description: `Your flexible spending (${analysisSafe.spendingPatterns.essentialVsFlexible.flexible} RON) is significantly higher than essential spending. Consider reallocating some of this to savings.`,
                 impact: 'high',
                 icon: '💰',
-                potentialSavings: Math.round(spendingPatterns.essentialVsFlexible.flexible * 0.3),
+                potentialSavings: Math.round(analysisSafe.spendingPatterns.essentialVsFlexible.flexible * 0.3),
                 actionType: 'learn_more',
                 timeframe: 'general'
             });
         }
 
         // Category-specific insights
-        topCategories.forEach(cat => {
+        (analysisSafe.topCategories || []).filter(Boolean).forEach(cat => {
             if (cat.percentage > 40) {
                 tips.push({
                     id: `high-category-${cat.category}`,
@@ -90,8 +84,8 @@ export default function SmartTipsCard({ analysis, onUpdateBudget, onOpenChat }: 
         });
 
         // Weekly trend insights
-        if (weeklyStats.trend === 'increasing') {
-            const difference = weeklyStats.currentWeek - weeklyStats.lastWeek;
+        if (analysisSafe.weeklyStats?.trend === 'increasing') {
+            const difference = (analysisSafe.weeklyStats.currentWeek || 0) - (analysisSafe.weeklyStats.lastWeek || 0);
             tips.push({
                 id: 'weekly-trend',
                 title: 'Spending Trend Alert',
@@ -104,11 +98,11 @@ export default function SmartTipsCard({ analysis, onUpdateBudget, onOpenChat }: 
         }
 
         // Daily spending habits
-        if (weeklyStats.topSpendingDay.amount > averageDailySpending * 1.5) {
+        if ((analysisSafe.weeklyStats?.topSpendingDay?.amount || 0) > (analysisSafe.averageDailySpending || 0) * 1.5) {
             tips.push({
                 id: 'high-spending-day',
                 title: 'Daily Spending Pattern',
-                description: `${weeklyStats.topSpendingDay.day} tends to be your highest spending day. Planning ahead could help reduce these spikes.`,
+                description: `${analysisSafe.weeklyStats.topSpendingDay.day} tends to be your highest spending day. Planning ahead could help reduce these spikes.`,
                 impact: 'medium',
                 icon: '🎯',
                 actionType: 'learn_more',
@@ -117,7 +111,7 @@ export default function SmartTipsCard({ analysis, onUpdateBudget, onOpenChat }: 
         }
 
         // Seasonal advice
-        if (seasonalContext.isHolidaySeason) {
+        if (analysisSafe.seasonalContext?.isHolidaySeason) {
             tips.push({
                 id: 'holiday-planning',
                 title: 'Holiday Season Ahead',
@@ -130,8 +124,8 @@ export default function SmartTipsCard({ analysis, onUpdateBudget, onOpenChat }: 
         }
 
         // Weekend vs Weekday patterns
-        const weekendAvg = spendingPatterns.weekdayVsWeekend.weekend / 2;
-        const weekdayAvg = spendingPatterns.weekdayVsWeekend.weekday / 5;
+        const weekendAvg = (analysisSafe.spendingPatterns?.weekdayVsWeekend?.weekend || 0) / 2;
+        const weekdayAvg = (analysisSafe.spendingPatterns?.weekdayVsWeekend?.weekday || 0) / 5;
         if (weekendAvg > weekdayAvg * 2) {
             tips.push({
                 id: 'weekend-spending',
@@ -139,6 +133,99 @@ export default function SmartTipsCard({ analysis, onUpdateBudget, onOpenChat }: 
                 description: `Your average weekend spending (${Math.round(weekendAvg)} RON/day) is much higher than weekdays. Consider some budget-friendly weekend activities.`,
                 impact: 'medium',
                 icon: '🎯',
+                actionType: 'learn_more',
+                timeframe: 'general'
+            });
+        }
+
+        // New: Recurring Expenses Analysis
+        const recurringExpenses = analysisSafe.spendingPatterns?.recurringExpenses || [];
+        if (recurringExpenses.length > 0) {
+            const totalRecurring = recurringExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+            if (totalRecurring > (analysisSafe.averageDailySpending || 0) * 7) {
+                tips.push({
+                    id: 'recurring-expenses',
+                    title: 'Recurring Expenses Review',
+                    description: `You have ${recurringExpenses.length} recurring expenses totaling ${Math.round(totalRecurring)} RON. Review these to ensure they're all necessary.`,
+                    impact: 'high',
+                    icon: '🔄',
+                    actionType: 'learn_more',
+                    timeframe: 'monthly'
+                });
+            }
+        }
+
+        // New: Savings Opportunity
+        const potentialSavings = (analysisSafe.spendingPatterns?.essentialVsFlexible?.flexible || 0) * 0.2;
+        if (potentialSavings > 100) {
+            tips.push({
+                id: 'savings-opportunity',
+                title: 'Savings Opportunity',
+                description: `You could save up to ${Math.round(potentialSavings)} RON by reducing flexible spending by 20%.`,
+                impact: 'high',
+                icon: '💎',
+                potentialSavings: Math.round(potentialSavings),
+                actionType: 'learn_more',
+                timeframe: 'monthly'
+            });
+        }
+
+        // New: Category Balance
+        const unbalancedCategories = (analysisSafe.topCategories || []).filter(cat => cat && cat.percentage > 30);
+        if (unbalancedCategories.length > 1) {
+            tips.push({
+                id: 'category-balance',
+                title: 'Category Balance Alert',
+                description: `Your spending is concentrated in ${unbalancedCategories.length} categories. Consider diversifying your expenses.`,
+                impact: 'medium',
+                icon: '⚖️',
+                actionType: 'learn_more',
+                timeframe: 'general'
+            });
+        }
+
+        // New: Spending Frequency
+        const highFrequencyCategories = (analysisSafe.spendingPatterns?.categoryFrequency || []).filter(cat => cat && cat.frequency > 5);
+        if (highFrequencyCategories.length > 0) {
+            tips.push({
+                id: 'spending-frequency',
+                title: 'Frequent Spending Alert',
+                description: `You're making frequent purchases in ${highFrequencyCategories.length} categories. Consider bulk buying or subscription services.`,
+                impact: 'medium',
+                icon: '🛒',
+                actionType: 'learn_more',
+                timeframe: 'weekly'
+            });
+        }
+
+        // New: Time-based Spending
+        const eveningSpending = analysisSafe.spendingPatterns?.timeBasedSpending?.evening || 0;
+        const morningSpending = analysisSafe.spendingPatterns?.timeBasedSpending?.morning || 0;
+        if (eveningSpending > morningSpending * 2) {
+            tips.push({
+                id: 'time-based-spending',
+                title: 'Evening Spending Pattern',
+                description: 'You tend to spend more in the evening. Consider planning your purchases earlier in the day.',
+                impact: 'low',
+                icon: '🌙',
+                actionType: 'learn_more',
+                timeframe: 'general'
+            });
+        }
+
+        // New: Location-based Spending
+        const locationEntries = Object.entries(analysisSafe.spendingPatterns?.locationBasedSpending || {});
+        const maxLocation = locationEntries.reduce((max, [loc, amount]) =>
+            (typeof amount === 'number' && amount > max.amount) ? { location: loc, amount } : max,
+            { location: '', amount: 0 }
+        );
+        if (maxLocation.amount > (analysisSafe.averageDailySpending || 0) * 3) {
+            tips.push({
+                id: 'location-spending',
+                title: 'Location-based Spending',
+                description: `You spend significantly more in ${maxLocation.location}. Consider alternative locations for better deals.`,
+                impact: 'medium',
+                icon: '📍',
                 actionType: 'learn_more',
                 timeframe: 'general'
             });

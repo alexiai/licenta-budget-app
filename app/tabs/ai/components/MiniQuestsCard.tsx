@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -10,7 +10,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SpendingAnalysis, ExpenseData } from './SmartAdviceSection';
+import { SpendingAnalysis, ExpenseData } from './types';
 import QuestService from '@services/QuestService';
 import { useAuth } from '../../../../app/_layout';
 import questsImg from '@assets/decor/aiQuests.png';
@@ -25,12 +25,41 @@ interface MiniQuestsCardProps {
 export default function MiniQuestsCard({ analysis, expenses = [] }: MiniQuestsCardProps): JSX.Element {
     const { user } = useAuth();
     const { data: userProgress, loading: loadingProgress } = QuestService.useUserProgress(user?.uid || '');
-    const { data: quests, loading: loadingQuests } = QuestService.useQuests(user?.uid || '');
+    const [quests, setQuests] = useState<UserQuest[]>([]);
+    const [loading, setLoading] = useState(true);
     const [showQuestInfo, setShowQuestInfo] = useState(false);
     const [showLevelInfo, setShowLevelInfo] = useState(false);
     const [showBadgeInfo, setShowBadgeInfo] = useState(false);
 
-    if (!user || loadingProgress || loadingQuests) {
+    console.log('[MiniQuestsCard] Received analysis:', analysis);
+    if (analysis) {
+        console.log('[MiniQuestsCard] analysis.totalSpent type:', typeof analysis.totalSpent, analysis.totalSpent);
+        console.log('[MiniQuestsCard] analysis.topCategories type:', Array.isArray(analysis.topCategories), analysis.topCategories);
+        console.log('[MiniQuestsCard] analysis.categoryBreakdown:', analysis.categoryBreakdown);
+    }
+
+    useEffect(() => {
+        const loadQuests = async () => {
+            if (!user || !analysis) {
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const userQuests = await QuestService.generateQuests(user.uid, analysis);
+                setQuests(userQuests);
+            } catch (error) {
+                console.error('Error loading quests:', error);
+                Alert.alert('Error', 'Failed to load quests. Please try again.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadQuests();
+    }, [user, analysis]);
+
+    if (!user || loadingProgress || loading) {
         return (
             <View style={styles.container}>
                 <View style={styles.headerRow}>
@@ -49,6 +78,9 @@ export default function MiniQuestsCard({ analysis, expenses = [] }: MiniQuestsCa
         try {
             await QuestService.updateQuest(questId, { status: 'completed' });
             Alert.alert('Quest Completed! 🎉', 'You earned some carrot coins!');
+            // Reload quests after completion
+            const userQuests = await QuestService.generateQuests(user.uid, analysis!);
+            setQuests(userQuests);
         } catch (error) {
             console.error('Error completing quest:', error);
             Alert.alert('Error', 'Failed to complete quest. Please try again.');
@@ -95,55 +127,69 @@ export default function MiniQuestsCard({ analysis, expenses = [] }: MiniQuestsCa
             </View>
 
             {/* Quests List */}
-            {quests?.map((quest: UserQuest) => (
-                <View key={quest.id} style={styles.questCard}>
-                    <LinearGradient
-                        colors={getQuestColor(quest.type)}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.questBadge}
-                    >
-                        <Text style={styles.questType}>{quest.type}</Text>
-                    </LinearGradient>
-
-                    <View style={styles.questHeader}>
-                        <Text style={styles.questTitle}>{quest.title}</Text>
-                        <Text style={styles.questDescription}>{quest.description}</Text>
-                    </View>
-
-                    <View style={styles.questProgress}>
-                        <View style={styles.progressBar}>
-                            <View 
-                                style={[
-                                    styles.progressFill,
-                                    { width: `${(quest.progress / quest.target) * 100}%` }
-                                ]}
-                            />
-                        </View>
-                        <Text style={styles.progressText}>
-                            {quest.progress} / {quest.target}
-                        </Text>
-                    </View>
-
-                    <View style={styles.questFooter}>
-                        <View style={styles.rewardContainer}>
-                            <Text style={styles.rewardText}>Reward: {quest.reward} 🥕</Text>
-                        </View>
-                        <TouchableOpacity
-                            style={[
-                                styles.completeButton,
-                                quest.status === 'completed' && styles.completedButton
-                            ]}
-                            onPress={() => handleQuestComplete(quest.id)}
-                            disabled={quest.status === 'completed'}
+            {quests?.filter(q => q.status !== 'claimed').map((quest: UserQuest) => {
+                // Unique key
+                const questKey = `${quest.id}-${quest.startDate}`;
+                // Determine if quest can be claimed (period is over)
+                const now = new Date();
+                const questEnd = quest.endDate ? new Date(quest.endDate) : null;
+                const canClaim = quest.status === 'completed' && questEnd && questEnd < now;
+                console.log('Quest:', quest.title, 'Status:', quest.status, 'canClaim:', canClaim, 'endDate:', quest.endDate, 'now:', now);
+                return (
+                    <View key={questKey} style={styles.questCard}>
+                        <LinearGradient
+                            colors={getQuestColor(quest.type)}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.questBadge}
                         >
-                            <Text style={styles.completeButtonText}>
-                                {quest.status === 'completed' ? 'Completed!' : 'Complete'}
+                            <Text style={styles.questType}>{quest.type}</Text>
+                        </LinearGradient>
+
+                        <View style={styles.questHeader}>
+                            <Text style={styles.questTitle}>{quest.title}</Text>
+                            <Text style={styles.questDescription}>{quest.description}</Text>
+                        </View>
+
+                        <View style={styles.questProgress}>
+                            <View style={styles.progressBar}>
+                                <View 
+                                    style={[
+                                        styles.progressFill,
+                                        { width: `${(quest.progress / quest.target) * 100}%` }
+                                    ]}
+                                />
+                            </View>
+                            <Text style={styles.progressText}>
+                                {quest.progress} / {quest.target}
                             </Text>
-                        </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.questFooter}>
+                            <View style={styles.rewardContainer}>
+                                <Text style={styles.rewardText}>Reward: {quest.reward} 🥕</Text>
+                            </View>
+                            {canClaim ? (
+                                <TouchableOpacity
+                                    style={[styles.completeButton, styles.completedButton]}
+                                    onPress={() => handleQuestComplete(quest.id)}
+                                >
+                                    <Text style={styles.completeButtonText}>Claim Reward</Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity
+                                    style={styles.completeButton}
+                                    disabled={true}
+                                >
+                                    <Text style={styles.completeButtonText}>
+                                        {quest.status === 'completed' ? 'Waiting...' : 'Complete'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     </View>
-                </View>
-            ))}
+                );
+            })}
 
             {(!quests || quests.length === 0) && (
                 <View style={styles.emptyCard}>

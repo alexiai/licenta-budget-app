@@ -111,7 +111,6 @@ export default function CalendarOverview() {
         <ImageBackground source={bg} resizeMode="cover" style={styles.container}>
                 <OverviewHeader />
                 <Text style={styles.title}>Daily Hop</Text>
-                <Text style={styles.balance}>Burrow Balance: {totalCarrotCoins}</Text>
                 <ScrollView>
                 <View style={styles.calendarWrapper}>
                     <Calendar

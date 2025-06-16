@@ -51,6 +51,8 @@ export default function MyProfileScreen() {
     // Delete account state
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
 
+    const [showAllBadges, setShowAllBadges] = useState(false);
+
     interface UserData {
         name: string;
         surname: string;
@@ -233,15 +235,20 @@ export default function MyProfileScreen() {
                         {earnedBadges.length > 0 && (
                             <View style={styles.earnedBadgesContainer}>
                                 <Text style={styles.earnedBadgesTitle}>🏆 Earned Badges</Text>
-                                <View style={styles.badgeGrid}>
-                                    {earnedBadges.map((badge) => (
-                                        <View key={badge.id} style={styles.earnedBadge}>
-                                            <Text style={styles.badgeEmoji}>{badge.emoji}</Text>
-                                            <Text style={styles.badgeName}>{badge.name}</Text>
-                                            <Text style={styles.badgeDesc}>{badge.description}</Text>
+                                <View style={showAllBadges ? styles.badgeGrid : styles.badgeWallCompact}>
+                                    {(showAllBadges ? earnedBadges : earnedBadges.slice(0, 6)).map((badge) => (
+                                        <View key={badge.id} style={showAllBadges ? styles.earnedBadge : styles.compactBadge}>
+                                            <Text style={showAllBadges ? styles.badgeEmoji : styles.compactBadgeEmoji}>{badge.emoji}</Text>
+                                            <Text style={showAllBadges ? styles.badgeName : styles.compactBadgeTitle}>{badge.name}</Text>
+                                            {showAllBadges && <Text style={styles.badgeDesc}>{badge.description}</Text>}
                                         </View>
                                     ))}
                                 </View>
+                                {earnedBadges.length > 6 && (
+                                    <TouchableOpacity onPress={() => setShowAllBadges((v) => !v)}>
+                                        <Text style={styles.showMoreBtn}>{showAllBadges ? 'Show less' : 'Show more'}</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         )}
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
-import { SpendingAnalysis } from './SmartAdviceSection';
+import { SpendingAnalysis } from './types';
 import { LinearGradient } from 'expo-linear-gradient';
 import questsImg from '@assets/decor/aiQuests.png';
 import { auth } from '@lib/firebase';
