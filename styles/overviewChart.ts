@@ -40,7 +40,7 @@ export default StyleSheet.create({
         marginRight: 8,
     },
     legendText: {
-        fontSize: 17,
+        fontSize: 15,
         fontFamily: 'Fredoka',
         color: '#3D405B',
         fontWeight: '500',

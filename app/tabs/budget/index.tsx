@@ -14,6 +14,7 @@ import EditBudget from './EditBudget';
 import bg from '@assets/bg/budgetback.png';
 import categories from '@lib/categories';
 import { Ionicons } from '@expo/vector-icons';
+import { Calendar } from 'react-native-calendars';
 
 interface Income {
     type: string;
@@ -50,6 +51,7 @@ export default function BudgetScreen() {
     const [budgetData, setBudgetData] = useState<any>(null);
     const [showChart, setShowChart] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
+    const [selectedMonth, setSelectedMonth] = useState(new Date());
 
     const loadBudget = async (id: string) => {
         const snap = await getDoc(doc(db, 'budgets', id));

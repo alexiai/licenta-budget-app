@@ -8,6 +8,7 @@ import bg from '@assets/bg/background2.png';
 import categories from '@lib/categories';
 import styles from '@styles/expensesAdd';
 import expenseService from '../../../services/ExpenseService';
+import { toISODateString, formatDateToDDMMYYYY } from '@lib/utils/dateUtils';
 
 console.log('Imported styles:', styles);
 
@@ -20,7 +21,7 @@ export default function AddExpense() {
     const [open, setOpen] = useState(false);
     const [budgetId, setBudgetId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    const [date, setDate] = useState(new Date().toLocaleDateString('en-GB')); // Format: dd/mm/yyyy
+    const [date, setDate] = useState(formatDateToDDMMYYYY(new Date())); // Format: dd/mm/yyyy
     const [errors, setErrors] = useState({
         amount: '',
         date: '',
@@ -120,31 +121,26 @@ export default function AddExpense() {
         if (!validateForm()) {
             return;
         }
-
         if (!auth.currentUser || !budgetId) {
             console.error('No user or budget ID');
             return;
         }
-
         setLoading(true);
-
         try {
-            const [day, month, year] = date.split('/').map(Number);
-            const expenseDate = new Date(year, month - 1, day);
-
+            const isoDate = toISODateString(date);
+            const noteToSave = note && note.trim().length > 0 ? note : selectedSubcategory!;
             await expenseService.addExpense({
                 userId: auth.currentUser.uid,
                 budgetId,
                 amount: Number(amount),
                 category: selectedCategory!,
                 subcategory: selectedSubcategory!,
-                note: note,
-                date: expenseDate.toISOString(),
+                note: noteToSave,
+                date: isoDate,
             });
-
             setSuccessMessage("Yay! Your Bunnyspense was saved successfully!");
             setTimeout(() => {
-                router.back();
+                router.replace('/tabs/overview/list');
             }, 1500);
         } catch (error) {
             console.error('Error adding expense:', error);

@@ -10,6 +10,7 @@ import bg from '@assets/bg/background3.png';
 import bunnyIcon from '@assets/icons/bunnyhead.png';
 import categories from '@lib/categories';
 import { filterExpensesByPeriod, getPeriodTitle } from '@lib/utils/expenseFilters';
+import { formatDateToDDMMYYYY } from '@lib/utils/dateUtils';
 import styles from '../../../../styles/overviewList';
 import BudgetSelector from '../../../../components/BudgetSelector';
 
@@ -42,13 +43,13 @@ const ExpenseItem = ({ expense, isEditing, onDelete }: {
                 })}
             >
                 <View>
-                    <Text style={[styles.subcategory, expense.subcategory?.length > 10 && styles.subcategoryMultiline]}>
-                        {expense.subcategory}
+                    <Text style={[styles.subcategory, (expense.subcategory || '').length > 10 && styles.subcategoryMultiline]}>
+                        {expense.subcategory || ''}
                     </Text>
                     {expense.source === 'bank' && (
                         <Text style={styles.sourceText}>Bank Transaction</Text>
                     )}
-                    {expense.note && (
+                    {typeof expense.note === 'string' && expense.note.length > 0 && (
                         <Text style={styles.noteText}>{expense.note}</Text>
                     )}
                 </View>
@@ -57,7 +58,7 @@ const ExpenseItem = ({ expense, isEditing, onDelete }: {
             <View style={styles.amountBlock}>
                 <View style={styles.amountRow}>
                     <Image source={require('@assets/icons/carrotcoinlist.png')} style={styles.carrotImage} />
-                    <Text style={styles.amountText}>{expense.amount}</Text>
+                    <Text style={styles.amountText}>{String(expense.amount ?? '')}</Text>
                 </View>
                 <Text style={styles.carrotCoinText}>CarrotCoins</Text>
             </View>
@@ -72,6 +73,7 @@ export default function OverviewListScreen() {
     const [selectedBudget, setSelectedBudget] = useState<any>(null);
     const [periodOffset, setPeriodOffset] = useState(0);
     const [isEditing, setIsEditing] = useState(false);
+    const [burrowBalance, setBurrowBalance] = useState<number>(0);
     const router = useRouter();
 
     // Memoize the query to prevent unnecessary re-creations
@@ -128,24 +130,54 @@ export default function OverviewListScreen() {
     // Process expenses when they change
     useEffect(() => {
         const processExpenses = () => {
-            const grouped = allExpenses.reduce((acc, expense) => {
-                const date = new Date(expense.date).toLocaleDateString();
+            // Restore period filter
+            let filtered = allExpenses;
+            if (selectedBudget) {
+                filtered = filterExpensesByPeriod(allExpenses, selectedBudget, periodOffset);
+            } else {
+                // Fallback: filter by month if no budget selected
+                const now = new Date();
+                const month = now.getMonth() + periodOffset;
+                const year = now.getFullYear() + Math.floor(month / 12);
+                const adjustedMonth = ((month % 12) + 12) % 12;
+                const firstDay = new Date(year, adjustedMonth, 1);
+                const lastDay = new Date(year, adjustedMonth + 1, 0);
+                filtered = allExpenses.filter(exp => {
+                    const expDate = new Date(exp.date);
+                    return expDate >= firstDay && expDate <= lastDay;
+                });
+            }
+            // Group by dd/mm/yyyy
+            const grouped = filtered.reduce((acc, expense) => {
+                const date = formatDateToDDMMYYYY(expense.date);
                 if (!acc[date]) acc[date] = [];
                 acc[date].push(expense);
                 return acc;
             }, {} as Record<string, Expense[]>);
-
+            // Debug: log grouped data
+            console.log('grouped:', grouped);
             setExpensesByDate(grouped);
-            
             // Calculate total carrot coins
-            const total = allExpenses.reduce((sum, expense) => {
+            const total = filtered.reduce((sum, expense) => {
                 return sum + (expense.carrotCoins || 0);
             }, 0);
             setTotalCarrotCoins(total);
         };
-
         processExpenses();
-    }, [allExpenses]);
+    }, [allExpenses, selectedBudget, periodOffset]);
+
+    // Update burrow balance when expenses or budget change
+    useEffect(() => {
+        let filtered = allExpenses;
+        if (selectedBudget) {
+            filtered = filterExpensesByPeriod(allExpenses, selectedBudget, periodOffset);
+            const totalExpenses = filtered.reduce((sum, expense) => sum + (expense.amount || 0), 0);
+            const budgetAmount = selectedBudget.amount || 0;
+            setBurrowBalance(budgetAmount - totalExpenses);
+        } else {
+            setBurrowBalance(0);
+        }
+    }, [allExpenses, selectedBudget, periodOffset]);
 
     // Memoize the render item function
     const renderExpenseItem = useCallback(({ item: [date, expenses] }: { item: [string, Expense[]] }) => {
@@ -232,8 +264,6 @@ export default function OverviewListScreen() {
                 </View>
             </View>
 
-            <Text style={styles.balance}>Burrow Balance: {totalCarrotCoins}</Text>
-
             <FlatList
                 data={expenseData}
                 keyExtractor={([date]) => date}
@@ -244,6 +274,7 @@ export default function OverviewListScreen() {
                 removeClippedSubviews={true}
                 updateCellsBatchingPeriod={50}
                 onEndReachedThreshold={0.5}
+                ListEmptyComponent={<Text style={{textAlign:'center',marginTop:40,fontSize:18}}>No expenses to display.</Text>}
             />
 
             <View style={styles.addBtnWrapper}>

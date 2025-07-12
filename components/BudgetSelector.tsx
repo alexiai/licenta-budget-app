@@ -8,7 +8,8 @@ import {
     StyleSheet,
     TouchableWithoutFeedback,
     Dimensions,
-    Alert
+    Alert,
+    Platform
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -82,44 +83,61 @@ export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBu
     };
 
     const handleDelete = async (budgetId: string) => {
-        Alert.alert(
-            "Delete Budget",
-            "Are you sure you want to delete this budget? This action cannot be undone.",
-            [
-                {
-                    text: "Cancel",
-                    style: "cancel"
-                },
-                {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            // Delete from Firestore
-                            await deleteDoc(doc(db, 'budgets', budgetId));
-                            
-                            // Update local state
-                            setBudgets(prev => prev.filter(b => b.id !== budgetId));
-                            
-                            // If the deleted budget was selected, clear the selection
-                            if (selectedId === budgetId) {
-                                setSelectedId(null);
-                                await AsyncStorage.removeItem('selectedBudget');
-                                onBudgetChange?.(null);
+        console.log('[BudgetSelector] handleDelete called for:', budgetId);
+        if (Platform.OS === 'web') {
+            // Delete immediately on web
+            try {
+                await deleteDoc(doc(db, 'budgets', budgetId));
+                console.log('[BudgetSelector] Deleted budget from Firestore:', budgetId);
+                setBudgets(prev => prev.filter(b => b.id !== budgetId));
+                if (selectedId === budgetId) {
+                    setSelectedId(null);
+                    await AsyncStorage.removeItem('selectedBudget');
+                    onBudgetChange?.(null);
+                }
+                setModalVisible(false);
+                alert('Budget deleted successfully');
+            } catch (error) {
+                console.error('[BudgetSelector] Error deleting budget:', error);
+                alert('Failed to delete budget. Please try again.');
+                throw error;
+            }
+        } else {
+            // Native: show confirmation dialog
+            Alert.alert(
+                "Delete Budget",
+                "Are you sure you want to delete this budget? This action cannot be undone.",
+                [
+                    {
+                        text: "Cancel",
+                        style: "cancel"
+                    },
+                    {
+                        text: "Delete",
+                        style: "destructive",
+                        onPress: async () => {
+                            try {
+                                console.log('[BudgetSelector] Attempting to delete budget:', budgetId);
+                                await deleteDoc(doc(db, 'budgets', budgetId));
+                                console.log('[BudgetSelector] Deleted budget from Firestore:', budgetId);
+                                setBudgets(prev => prev.filter(b => b.id !== budgetId));
+                                if (selectedId === budgetId) {
+                                    setSelectedId(null);
+                                    await AsyncStorage.removeItem('selectedBudget');
+                                    onBudgetChange?.(null);
+                                }
+                                setModalVisible(false);
+                                Alert.alert('Success', 'Budget deleted successfully');
+                            } catch (error) {
+                                console.error('[BudgetSelector] Error deleting budget:', error);
+                                Alert.alert('Error', 'Failed to delete budget. Please try again.');
+                                throw error;
                             }
-                            
-                            // Close the modal
-                            setModalVisible(false);
-                            
-                            Alert.alert('Success', 'Budget deleted successfully');
-                        } catch (error) {
-                            console.error('Error deleting budget:', error);
-                            Alert.alert('Error', 'Failed to delete budget. Please try again.');
                         }
                     }
-                }
-            ]
-        );
+                ]
+            );
+        }
     };
 
     const handleNewBudget = () => {
@@ -129,11 +147,18 @@ export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBu
         } else {
             router.push('/tabs/budget/onboarding');
         }
+        // Refresh budgets after creating a new one
+        setTimeout(() => {
+            fetchBudgets();
+        }, 1000); // Give some time for Firestore to update
     };
 
     return (
         <>
-            <TouchableOpacity style={styles.bar} onPress={() => setModalVisible(true)}>
+            <TouchableOpacity style={styles.bar} onPress={() => {
+                fetchBudgets();
+                setModalVisible(true);
+            }}>
                 <Ionicons name="wallet-outline" size={24} color="#91483C" style={styles.walletIcon} />
                 <Text style={styles.barText}>{selectedName}</Text>
                 <Ionicons name="chevron-down" size={20} color="#91483C" style={styles.arrowIcon} />
@@ -177,7 +202,10 @@ export default function BudgetSelector({ onBudgetChange, onNewBudget, selectedBu
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={styles.deleteButton}
-                                    onPress={() => handleDelete(item.id)}
+                                    onPress={() => {
+                                        console.log('[BudgetSelector] Trash can pressed for budget:', item.id);
+                                        handleDelete(item.id);
+                                    }}
                                 >
                                     <Ionicons name="trash-outline" size={20} color="#ff4444" />
                                 </TouchableOpacity>

@@ -17,6 +17,7 @@ import UnusedCategoriesCard from './components/UnusedCategoriesCard';
 import WeeklyStatsCard from './components/WeeklyStatsCard';
 import MiniQuestsCard from './components/MiniQuestsCard';
 import { generateSpendingAnalysis } from './components/analysisUtils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type TabType = 'tips' | 'categories' | 'stats' | 'quests';
 
@@ -27,6 +28,7 @@ export default function AiScreen(): JSX.Element {
     const [analysis, setAnalysis] = useState<SpendingAnalysis | null>(null);
     const [expenses, setExpenses] = useState<ExpenseData[]>([]);
     const router = useRouter();
+    const ACTIVE_TAB_KEY = 'ai_active_tab';
 
     useEffect(() => {
         const loadData = async () => {
@@ -47,54 +49,11 @@ export default function AiScreen(): JSX.Element {
                     ...doc.data(),
                     id: doc.id
                 })) as ExpenseData[];
-                console.log('[AiScreen] Fetched expenses:', {
-                    count: expensesData.length,
-                    sample: expensesData.slice(0, 2)
-                });
+                console.log('[AiScreen] Fetched expenses:', expensesData);
                 setExpenses(expensesData);
 
                 // Generate analysis
-                console.log('[AiScreen] Generating analysis...');
-                const analysisData: SpendingAnalysis = {
-                    totalThisMonth: 1000,
-                    totalLastMonth: 900,
-                    averageDailySpending: 33.33,
-                    topCategories: [],
-                    weeklyStats: {
-                        currentWeek: 200,
-                        lastWeek: 180,
-                        trend: 'increasing',
-                        topSpendingDay: { day: 'Friday', amount: 50 },
-                        dailyBreakdown: {
-                            Monday: 30,
-                            Tuesday: 25,
-                            Wednesday: 35,
-                            Thursday: 40,
-                            Friday: 50,
-                            Saturday: 45,
-                            Sunday: 35
-                        }
-                    },
-                    spendingPatterns: {
-                        essentialVsFlexible: {
-                            essential: 600,
-                            flexible: 400
-                        },
-                        weekdayVsWeekend: {
-                            weekday: 150,
-                            weekend: 100
-                        },
-                        todayTotal: 30,
-                        recentSpikes: []
-                    },
-                    categoryBreakdown: {},
-                    subcategoryBreakdown: {},
-                    unusedCategories: [],
-                    seasonalContext: {
-                        isHolidaySeason: false,
-                        month: new Date().toLocaleString('default', { month: 'long' })
-                    }
-                };
+                const analysisData = generateSpendingAnalysis(expensesData);
                 console.log('[AiScreen] Generated analysis:', analysisData);
                 setAnalysis(analysisData);
 
@@ -115,6 +74,31 @@ export default function AiScreen(): JSX.Element {
 
         loadData();
     }, []);
+
+    // Load last active tab from AsyncStorage on mount
+    useEffect(() => {
+        (async () => {
+            try {
+                const storedTab = await AsyncStorage.getItem(ACTIVE_TAB_KEY);
+                if (storedTab && ['tips','categories','stats','quests'].includes(storedTab)) {
+                    setActiveTab(storedTab as TabType);
+                }
+            } catch (e) {
+                // Ignore errors
+            }
+        })();
+    }, []);
+
+    // Save active tab to AsyncStorage whenever it changes
+    useEffect(() => {
+        (async () => {
+            try {
+                await AsyncStorage.setItem(ACTIVE_TAB_KEY, activeTab);
+            } catch (e) {
+                // Ignore errors
+            }
+        })();
+    }, [activeTab]);
 
     const handleUpdateBudget = (category?: string) => {
         // Navigate to budget settings with category context
@@ -245,7 +229,7 @@ export default function AiScreen(): JSX.Element {
                             styles.tabButton,
                             activeTab === tab.id && styles.tabButtonActive
                         ]}
-                        onPress={() => setActiveTab(tab.id)}
+                        onPress={() => setActiveTab(tab.id as TabType)}
                     >
                         <Image
                             source={carrotIcon}

@@ -16,7 +16,7 @@ export default function BankConnect() {
 
     const fetchBanks = async () => {
         try {
-            const res = await axios.get('http://192.168.0.1:5000/api/banks');
+            const res = await axios.get('http://localhost:5000/api/banks');
             setBanks(res.data);
             setFilteredBanks(res.data);
         } catch (err) {
@@ -28,7 +28,7 @@ export default function BankConnect() {
     const handleConnect = async (institutionId: string) => {
         setLoading(true);
         try {
-            const response = await axios.post('http://192.168.0.1:5000/api/connect-gocardless', {
+            const response = await axios.post('http://localhost:5000/api/connect-gocardless', {
                 institution_id: institutionId,
             });
 

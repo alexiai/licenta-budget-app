@@ -9,13 +9,17 @@ import bg from '@assets/bg/background3.png';
 import iconGood from '@assets/icons/calendarGood.png';
 import iconMedium from '@assets/icons/calendarMedium.png';
 import iconBad from '@assets/icons/calendarBad.png';
+import { filterExpensesByPeriod } from '@lib/utils/expenseFilters';
+import { formatDateToDDMMYYYY } from '@lib/utils/dateUtils';
 
 const { width } = Dimensions.get('window');
 
 export default function CalendarOverview() {
     const [markedDates, setMarkedDates] = useState<any>({});
     const [totalCarrotCoins, setTotalCarrotCoins] = useState(0);
-
+    const [selectedMonth, setSelectedMonth] = useState(new Date());
+    const [expenses, setExpenses] = useState<any[]>([]);
+    const [budget, setBudget] = useState<any>(null);
 
     useEffect(() => {
         const fetchExpensesAndBudget = async () => {
@@ -27,67 +31,75 @@ export default function CalendarOverview() {
                 getDocs(query(collection(db, 'budgets'), where('userId', '==', user.uid))),
             ]);
 
-            const expenses = expSnap.docs.map(doc => doc.data());
-            const budgets = budgetSnap.docs.map(doc => doc.data());
-
-            if (!budgets.length) return;
-
-            // ➔ logica NOUĂ pentru calcularea bugetului per zi în funcție de perioadă
-            const budget = budgets[0];
-            let totalIncome = 0;
-            if (budget.incomes && budget.incomes.length > 0) {
-                totalIncome = budget.incomes.reduce((sum: number, income: any) => {
-                    return sum + parseFloat(income.amount || '0');
-                }, 0);
-            }
-
-            const period = budget.period?.toLowerCase(); // 'monthly', 'weekly', 'bi-weekly
-
-            let budgetPerDay;
-            switch (period) {
-                case 'weekly':
-                    budgetPerDay = totalIncome / 7;
-                    break;
-                case 'bi-weekly':
-                    budgetPerDay = totalIncome / 14;
-                    break;
-                default: // monthly sau dacă lipsește
-                    budgetPerDay = totalIncome / 30;
-            }
-
-            const groupedExpenses: any = {};
-            expenses.forEach(exp => {
-                const date = new Date(exp.date).toISOString().split('T')[0];
-                if (!groupedExpenses[date]) groupedExpenses[date] = 0;
-                groupedExpenses[date] += parseFloat(exp.amount || '0');
-            });
-
-            const marks: any = {};
-            Object.keys(groupedExpenses).forEach(date => {
-                const amount = groupedExpenses[date];
-                const percentage = amount / budgetPerDay;
-
-                let icon = iconGood;
-                if (percentage > 1.5) icon = iconBad;
-                else if (percentage > 1.0) icon = iconMedium;
-
-                marks[date] = {
-                    customStyles: {
-                        container: {
-                            backgroundColor: 'transparent',
-                            borderRadius: 20,
-                        },
-                        text: { color: 'transparent' },
-                    },
-                    icon,
-                };
-            });
-
-            setMarkedDates(marks);
+            setExpenses(expSnap.docs.map(doc => doc.data()));
+            setBudget(budgetSnap.docs.length ? budgetSnap.docs[0].data() : null);
         };
 
         fetchExpensesAndBudget();
     }, []);
+
+    useEffect(() => {
+        if (!budget) return;
+
+        let totalIncome = 0;
+        if (budget.incomes && budget.incomes.length > 0) {
+            totalIncome = budget.incomes.reduce((sum: number, income: any) => {
+                return sum + parseFloat(income.amount || '0');
+            }, 0);
+        }
+
+        const period = budget.period?.toLowerCase(); // 'monthly', 'weekly', 'bi-weekly'
+
+        let budgetPerDay;
+        switch (period) {
+            case 'weekly':
+                budgetPerDay = totalIncome / 7;
+                break;
+            case 'bi-weekly':
+                budgetPerDay = totalIncome / 14;
+                break;
+            default: // monthly sau dacă lipsește
+                budgetPerDay = totalIncome / 30;
+        }
+
+        // Use selectedMonth for filtering
+        const firstDay = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1);
+        const lastDay = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0);
+        const filteredExpenses = expenses.filter(exp => {
+            const expDate = new Date(exp.date);
+            return expDate >= firstDay && expDate <= lastDay;
+        });
+
+        const groupedExpenses: any = {};
+        filteredExpenses.forEach(exp => {
+            const date = new Date(exp.date).toISOString().split('T')[0];
+            if (!groupedExpenses[date]) groupedExpenses[date] = 0;
+            groupedExpenses[date] += parseFloat(exp.amount || '0');
+        });
+
+        const marks: any = {};
+        Object.keys(groupedExpenses).forEach(date => {
+            const amount = groupedExpenses[date];
+            const percentage = amount / budgetPerDay;
+
+            let icon = iconGood;
+            if (percentage > 1.5) icon = iconBad;
+            else if (percentage > 1.0) icon = iconMedium;
+
+            marks[date] = {
+                customStyles: {
+                    container: {
+                        backgroundColor: 'transparent',
+                        borderRadius: 20,
+                    },
+                    text: { color: 'transparent' },
+                },
+                icon,
+            };
+        });
+
+        setMarkedDates(marks);
+    }, [selectedMonth, expenses, budget]);
 
     const renderDay = ({ date }: any) => {
         const dateString = `${date.year}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`;
@@ -117,6 +129,9 @@ export default function CalendarOverview() {
                         markingType={'custom'}
                         markedDates={markedDates}
                         dayComponent={renderDay}
+                        onMonthChange={(month) => {
+                            setSelectedMonth(new Date(month.year, month.month - 1, 1));
+                        }}
                         theme={{
                             calendarBackground: 'transparent',
                             textSectionTitleColor: '#d5790d',
@@ -166,5 +181,4 @@ export default function CalendarOverview() {
             </ScrollView>
         </ImageBackground>
     );
-
 }

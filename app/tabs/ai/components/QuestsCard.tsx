@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
         paddingTop: 8,
     },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: 'bold',
         color: '#91483C',
         fontFamily: 'Fredoka',
@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     questTitle: {
-        fontSize: 18,
+        fontSize: 30,
         fontWeight: 'bold',
         color: '#91483C',
         fontFamily: 'Fredoka',

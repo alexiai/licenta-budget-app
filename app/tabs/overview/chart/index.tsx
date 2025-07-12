@@ -11,6 +11,7 @@ import bg from '@assets/bg/background3.png';
 import carrotIcon from '@assets/icons/carrotcoinlist.png';
 import categories from '@lib/categories';
 import { filterExpensesByPeriod, getPeriodTitle } from '@lib/utils/expenseFilters';
+import { formatDateToDDMMYYYY } from '@lib/utils/dateUtils';
 
 interface Expense {
     date: string;
@@ -68,17 +69,21 @@ export default function ChartOverview() {
 
     const processExpenses = () => {
         if (!allExpenses.length) return;
-
         let filteredExpenses = allExpenses;
-        const currentDate = new Date();
-        const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + periodOffset, 1);
-        const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + periodOffset + 1, 0);
-
-        // Filter expenses for the selected month
-        filteredExpenses = allExpenses.filter(exp => {
-            const expDate = new Date(exp.date);
-            return expDate >= firstDayOfMonth && expDate <= lastDayOfMonth;
-        });
+        if (selectedBudget) {
+            filteredExpenses = filterExpensesByPeriod(allExpenses, selectedBudget, periodOffset);
+        } else {
+            const currentDate = new Date();
+            const month = currentDate.getMonth() + periodOffset;
+            const year = currentDate.getFullYear() + Math.floor(month / 12);
+            const adjustedMonth = ((month % 12) + 12) % 12;
+            const firstDayOfMonth = new Date(year, adjustedMonth, 1);
+            const lastDayOfMonth = new Date(year, adjustedMonth + 1, 0);
+            filteredExpenses = allExpenses.filter(exp => {
+                const expDate = new Date(exp.date);
+                return expDate >= firstDayOfMonth && expDate <= lastDayOfMonth;
+            });
+        }
 
         // Process filtered expenses for insights
         const categoryInsights: CategoryInsights = {};

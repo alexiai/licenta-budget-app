@@ -18,16 +18,20 @@ export function getPeriodRange(currentDate: Date, period: string, startDay: stri
             };
             const startOfWeek = date.day(weekdays[startDay.toLowerCase()] ?? 1);
             const endOfWeek = startOfWeek.add(6, 'day');
-            return { start: startOfWeek.toDate(), end: endOfWeek.toDate() };
+            const start = startOfWeek.toDate();
+            const end = endOfWeek.toDate();
+            end.setHours(23, 59, 59, 999);
+            return { start, end };
         }
 
         case 'biweekly': {
             const startDayNum = parseInt(startDay);
             const currentDay = date.date();
             const isAfterStart = currentDay >= startDayNum;
-            const start = isAfterStart ? date.date(startDayNum) : date.subtract(1, 'month').date(startDayNum);
-            const end = dayjs(start).add(13, 'day');
-            return { start: start.toDate(), end: end.toDate() };
+            const start = (isAfterStart ? date.date(startDayNum) : date.subtract(1, 'month').date(startDayNum)).toDate();
+            const end = dayjs(start).add(13, 'day').toDate();
+            end.setHours(23, 59, 59, 999);
+            return { start, end };
         }
 
         case 'monthly':
@@ -35,10 +39,11 @@ export function getPeriodRange(currentDate: Date, period: string, startDay: stri
             const startDayNum = parseInt(startDay);
             const currentDay = date.date();
             const isAfterStart = currentDay >= startDayNum;
-            const start = isAfterStart ? date.date(startDayNum) : date.subtract(1, 'month').date(startDayNum);
+            const start = (isAfterStart ? date.date(startDayNum) : date.subtract(1, 'month').date(startDayNum)).toDate();
             const nextMonth = dayjs(start).add(1, 'month').date(startDayNum);
-            const end = nextMonth.subtract(1, 'day');
-            return { start: start.toDate(), end: end.toDate() };
+            const end = nextMonth.subtract(1, 'day').toDate();
+            end.setHours(23, 59, 59, 999);
+            return { start, end };
         }
     }
 }

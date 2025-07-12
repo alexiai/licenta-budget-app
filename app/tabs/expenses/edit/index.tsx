@@ -9,6 +9,7 @@ import bg from '@assets/bg/background3.png';
 import categories from '@lib/categories';
 import styles from '@styles/expensesAdd';
 import expenseService from '../../../services/ExpenseService';
+import { toISODateString, formatDateToDDMMYYYY } from '@lib/utils/dateUtils';
 
 export default function EditExpense() {
     const router = useRouter();
@@ -76,10 +77,8 @@ export default function EditExpense() {
                     setSelectedSubcategory(data.subcategory);
                     setNote(data.note || '');
                     
-                    // Convert YYYY-MM-DD to dd/mm/yyyy
-                    const isoDate = data.date.split('T')[0]; // Handle both ISO string and YYYY-MM-DD
-                    const [year, month, day] = isoDate.split('-');
-                    setDate(`${day}/${month}/${year}`);
+                    // Convert ISO/DB date to dd/mm/yyyy
+                    setDate(formatDateToDDMMYYYY(data.date));
                 }
 
                 const storedBudgetId = await AsyncStorage.getItem('selectedBudget');
@@ -208,24 +207,19 @@ export default function EditExpense() {
 
         setSaving(true);
         try {
-            // Convert dd/mm/yyyy to YYYY-MM-DD
-            const [day, month, year] = date.split('/');
-            const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-
-            const updates = {
-                amount: parseFloat(amount),
-                category: selectedCategory,
-                subcategory: selectedSubcategory,
-                note: note || selectedSubcategory,
+            const isoDate = toISODateString(date);
+            await expenseService.updateExpense(expenseId as string, {
+                amount: Number(amount),
+                category: selectedCategory!,
+                subcategory: selectedSubcategory!,
+                note,
                 date: isoDate,
-            };
-            
-            await expenseService.updateExpense(expenseId as string, updates);
+            });
             alert('Expense updated successfully!');
             router.replace('/tabs/overview/list');
         } catch (error) {
-            console.error(error);
-            alert('Failed to update expense.');
+            console.error('Error updating expense:', error);
+            alert('Failed to update expense. Please try again.');
         } finally {
             setSaving(false);
         }

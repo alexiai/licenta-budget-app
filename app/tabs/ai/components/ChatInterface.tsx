@@ -24,6 +24,8 @@ import { useOCR, OCRDataProvider } from '../context/OCRContext';
 import { addDocWithCache } from '@lib/firebase';
 import expenseService from '../../../services/ExpenseService';
 import { findStoreInText } from '@lib/utils/storeNames';
+import { toISODateString, formatDateToDDMMYYYY } from '@lib/utils/dateUtils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 
@@ -177,6 +179,8 @@ export default function ChatInterface(): JSX.Element {
     const router = useRouter();
     const { ocrData, setOCRData } = useOCR();
 
+    const STORAGE_KEY = 'ai_chat_messages';
+
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
             id: '1',
@@ -202,6 +206,33 @@ export default function ChatInterface(): JSX.Element {
 
     // Add state for OCR confirmation
     const [pendingExpense, setPendingExpense] = useState<ParsedExpense | null>(null);
+
+    // Load messages from AsyncStorage on mount
+    useEffect(() => {
+        (async () => {
+            try {
+                const stored = await AsyncStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    // Convert timestamp strings back to Date objects
+                    setMessages(parsed.map((msg: any) => ({ ...msg, timestamp: new Date(msg.timestamp) })));
+                }
+            } catch (e) {
+                // Ignore errors, fallback to default
+            }
+        })();
+    }, []);
+
+    // Save messages to AsyncStorage whenever they change
+    useEffect(() => {
+        (async () => {
+            try {
+                await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+            } catch (e) {
+                // Ignore errors
+            }
+        })();
+    }, [messages]);
 
     // Initialize OCR provider
     useEffect(() => {
@@ -587,7 +618,7 @@ Is this correct?`, false);
     };
 
     const addMessage = (text: string, isUser: boolean, isTranslated = false, originalText?: string) => {
-        const newMessage: ChatMessage = {
+        const newMsg: ChatMessage = {
             id: generateUniqueId(),
             text,
             isUser,
@@ -595,8 +626,7 @@ Is this correct?`, false);
             isTranslated,
             originalText,
         };
-
-        setMessages(prev => [...prev, newMessage]);
+        setMessages(prev => [...prev, newMsg]);
         setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     };
 
@@ -780,6 +810,10 @@ Is this correct?`, false);
             if (amountMatch?.[1]) {
                 updatedParsing.amount = parseFloat(amountMatch[1].replace(',', '.'));
                 handled = true;
+            } else {
+                // If amount not understood, ask again
+                addMessage("Sorry, I couldn't understand the amount. Please enter a valid number (e.g., 42 or 42.50).", false);
+                return;
             }
         }
         // Handle date input
@@ -872,7 +906,6 @@ Is this correct?`, false);
             addMessage('Sorry, the expense data is incomplete. Please try again.', false);
             return;
         }
-
         try {
             setIsProcessing(true);
             const user = auth.currentUser;
@@ -880,37 +913,26 @@ Is this correct?`, false);
                 console.error('❌ No authenticated user found');
                 throw new Error('User not authenticated');
             }
-
             // Ensure date is in YYYY-MM-DD format
-            const formattedDate = expense.date.includes('T') 
-                ? expense.date.split('T')[0] 
-                : expense.date;
-
-            // Check if the original input text contains a store name
-            const storeMatch = findStoreInText(expense.note || '');
-            const note = storeMatch ? storeMatch.storeName : expense.subcategory;
-
-            // Add to Firestore with caching
+            const formattedDate = toISODateString(expense.date);
+            // Always set note to 'Chatbox' for chatbox-saved expenses
             const expenseData = {
                 amount: expense.amount,
                 category: expense.category,
                 subcategory: expense.subcategory,
                 date: formattedDate,
-                note: note || expense.subcategory,
+                note: 'Chatbox',
                 timestamp: new Date(),
                 userId: user.uid,
                 currency: 'RON',
                 source: 'ai-chat'
             };
-
             console.log('📝 Saving expense data:', JSON.stringify(expenseData, null, 2));
             await expenseService.addExpense(expenseData);
             console.log('✅ Expense saved successfully');
-
             const successMessage = userLanguage === 'ro'
                 ? `Perfect! Am salvat cheltuiala de ${expense.amount} lei pentru ${expense.category}.`
                 : `Great! I've saved your expense of ${expense.amount} RON for ${expense.category}.`;
-
             addMessage(successMessage, false);
             speakText(userLanguage === 'ro' ? 'Cheltuiala a fost salvată cu succes!' : 'Expense saved successfully!');
             setQuickReplies([]);
@@ -919,11 +941,9 @@ Is this correct?`, false);
         } catch (error) {
             console.error('❌ Error saving expense:', error);
             console.error('❌ Error details:', error instanceof Error ? error.message : 'Unknown error');
-            
             const errorMessage = userLanguage === 'ro'
                 ? 'A apărut o eroare la salvarea cheltuielii. Te rog să încerci din nou.'
                 : 'Sorry, there was an error saving your expense. Please try again.';
-            
             addMessage(errorMessage, false);
         } finally {
             setIsProcessing(false);
@@ -1072,6 +1092,26 @@ Is this correct?`, false);
         const textToSend = messageText || inputText.trim();
         if (!textToSend) return;
 
+        // If user types CLEAR, reset chat
+        if (textToSend === 'CLEAR') {
+            setMessages([
+                {
+                    id: '1',
+                    text: "Hi there! I'm your smart assistant for tracking expenses. You can tell me what you spent today, either by voice or text.",
+                    isUser: false,
+                    timestamp: new Date(),
+                },
+            ]);
+            setInputText('');
+            setQuickReplies([]);
+            setCurrentParsing(null);
+            setAwaitingInput(null);
+            setCorrectionState(null);
+            setPendingExpense(null);
+            await AsyncStorage.removeItem(STORAGE_KEY);
+            return;
+        }
+
         setIsProcessing(true);
 
         try {
@@ -1154,13 +1194,12 @@ Is this correct?`, false);
             if (!user) {
                 throw new Error('User not authenticated');
             }
-
             await addDocWithCache('expenses', {
                 ...expense,
+                note: 'Chatbox', // Always override note for chatbox/voice
                 timestamp: new Date(),
                 userId: user.uid
             });
-
             addMessage("Perfect! I've saved your expense.", false);
             setPendingExpense(null);
             setQuickReplies([]);
@@ -1185,6 +1224,7 @@ Is this correct?`, false);
                         originalExpense: expense,
                         correctedFields: new Set(['amount'])
                     });
+                    setCurrentParsing(expense); // Ensure currentParsing is set for follow-up
                 }
             },
             {
@@ -1218,6 +1258,19 @@ Is this correct?`, false);
             }
         ]);
     };
+
+    useEffect(() => {
+        // Clear messages on mount (when chatbox is opened)
+        setMessages([
+            {
+                id: '1',
+                text: "Hi there! I'm your smart assistant for tracking expenses. You can tell me what you spent today, either by voice or text.",
+                isUser: false,
+                timestamp: new Date(),
+            },
+        ]);
+        AsyncStorage.removeItem(STORAGE_KEY);
+    }, []);
 
     return (
         <ImageBackground source={bg} style={styles.container} resizeMode="cover">

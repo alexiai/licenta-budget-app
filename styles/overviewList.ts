@@ -111,9 +111,9 @@ export default StyleSheet.create({
         fontStyle: 'italic',
     },
     subcategoryMultiline: {
-        fontSize: 25,
+        fontSize: 13,
         letterSpacing: -0.5,
-        lineHeight: 22,
+        lineHeight: 16,
     },
     amountBlock: {
         alignItems: 'center',

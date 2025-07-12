@@ -128,6 +128,7 @@ export function generateSpendingAnalysis(expensesData: ExpenseData[]): SpendingA
     // --- Weekly trend ---
     const weeklyTotals = new Map<string, number>();
     expensesData.forEach(expense => {
+        const amount = Number(expense.amount) || 0;
         const date = new Date(expense.date);
         const weekStart = new Date(date);
         weekStart.setDate(date.getDate() - date.getDay());

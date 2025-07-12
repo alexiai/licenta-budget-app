@@ -50,6 +50,7 @@ export default function TabsLayout() {
                             focused={focused}
                         />
                     ),
+                    unmountOnBlur: false,
                 }}
             />
             <Tabs.Screen
@@ -63,6 +64,7 @@ export default function TabsLayout() {
                             focused={focused}
                         />
                     ),
+                    unmountOnBlur: false,
                 }}
             />
             <Tabs.Screen
@@ -76,6 +78,7 @@ export default function TabsLayout() {
                             focused={focused}
                         />
                     ),
+                    unmountOnBlur: false,
                 }}
             />
             <Tabs.Screen
@@ -89,6 +92,7 @@ export default function TabsLayout() {
                             focused={focused}
                         />
                     ),
+                    unmountOnBlur: false,
                 }}
             />
             <Tabs.Screen name="expenses" options={{ href: null }} />

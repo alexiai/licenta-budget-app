@@ -58,8 +58,9 @@ export default function BudgetOnboarding() {
         console.log('💾 Saving budget to Firebase...');
         const user = auth.currentUser;
         if (!user) {
+            console.error('[BudgetOnboarding] User not logged in!');
             Alert.alert('User not logged in!');
-            return;
+            throw new Error('User not logged in!');
         }
 
         const docRef = doc(collection(db, 'budgets'));
@@ -74,8 +75,12 @@ export default function BudgetOnboarding() {
             createdAt: new Date().toISOString(),
         };
 
+        console.log('[BudgetOnboarding] About to create budget with ID:', docRef.id);
+        console.log('[BudgetOnboarding] Payload:', payload);
+
         try {
             await setDoc(docRef, payload);
+            console.log('[BudgetOnboarding] Budget created in Firestore with ID:', docRef.id);
             await AsyncStorage.setItem('hasJustCreatedBudget', 'true');
             await AsyncStorage.setItem('selectedBudget', docRef.id);
             Alert.alert('Budget created!');
@@ -83,6 +88,7 @@ export default function BudgetOnboarding() {
         } catch (error) {
             console.error('❌ Error saving budget:', error);
             Alert.alert('Something went wrong. Please try again.');
+            throw error;
         }
     };
 

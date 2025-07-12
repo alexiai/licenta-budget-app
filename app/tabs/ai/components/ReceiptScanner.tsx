@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import axios from 'axios';
 import { findCategoryByProduct } from '../../../../lib/productAssociation';
+import { toISODateString } from '@lib/utils/dateUtils';
 
 // Define API URL based on platform
 const API_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
@@ -133,8 +134,8 @@ export default function ReceiptScanner({ onReceiptData }: ReceiptScannerProps): 
                             amount: amountInRON,
                             category,
                             subcategory,
-                            date: date.toISOString().split('T')[0],
-                            note: `Receipt scan: ${receipt.merchant_name || 'Unknown merchant'} - ${category}`,
+                            date: toISODateString(date),
+                            note: 'OCR receipt scan',
                             confidence: 100
                         };
 

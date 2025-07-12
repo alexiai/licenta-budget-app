@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
         paddingTop: 8,
     },
     headerTitle: {
-        fontSize: 22,
+        fontSize: 28,
         fontWeight: 'bold',
         color: '#90483c',
         fontFamily: 'Fredoka',
