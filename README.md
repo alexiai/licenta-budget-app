@@ -220,7 +220,4 @@ npx expo start
 ---
 
 ## 👩‍💻 Author
-Application developed by Cojan Alexia Ilaria
-License – Faculty of Mathematics and Computer Science
-Babeș-Bolyai University, Cluj-Napoca
-Coordinator: Prof. Univ. Dr. Lazăr Ioan
+Application fully developed by Cojan Alexia Ilaria
