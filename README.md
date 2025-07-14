@@ -196,6 +196,26 @@ npx expo start
 🎞️ [Add Bunnyspense + Card](https://drive.google.com/drive/folders/1zD9nYU2fS9u6U8J6LleyPth1kbmpWRdg?dmr=1&ec=wgc-drive-hero-goto)
 🎞️ [Ai pages](https://drive.google.com/drive/folders/1zD9nYU2fS9u6U8J6LleyPth1kbmpWRdg?dmr=1&ec=wgc-drive-hero-goto)
 
+## 🖼️ Some Screenshots
+
+<table>
+  <tr>
+    <td><img src="./assets/screenshots/budget.png" width="250"/></td>
+    <td><img src="./assets/screenshots/overviewlist.png" width="250"/></td>
+    <td><img src="./assets/screenshots/overviewchart.png" width="250"/></td>
+  </tr>
+  <tr>
+    <td><img src="./assets/screenshots/overviewcalendar.png" width="250"/></td>
+    <td><img src="./assets/screenshots/chatbox.png" width="250"/></td>
+    <td><img src="./assets/screenshots/AI.png" width="250"/></td>
+  </tr>
+  <tr>
+    <td><img src="./assets/screenshots/profile.png" width="250"/></td>
+    <td><img src="./assets/screenshots/bank.png" width="250"/></td>
+    <td></td>
+  </tr>
+</table>
+
 
 ---
 
