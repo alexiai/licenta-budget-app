@@ -143,7 +143,55 @@ Gamification is completely and subtly integrated into the BunnyBuddy experience:
 - Animated bunnies, pastel colors, and friendly icons.
 - Motivational messages and visual metaphors in all application components.
 
----
+## 🧠 Advanced AI & NLP System
+
+BunnyBuddy integrates a multi-layered AI system designed to simplify expense input, improve classification accuracy, and offer personalized insights. It combines custom-built natural language processing, optical character recognition, and a smart voice interface.
+
+### 🗨️ NLP Engine
+
+- Developed entirely in **TypeScript**, without external NLP libraries.
+- Uses a **custom bilingual dictionary (RO/EN)** with semantic mappings (e.g., synonyms like *mâncare*, *food*, *alimentar*).
+- Files like `translationDictionary.ts` and `productAssociation.ts` handle:
+  - Translation
+  - Category mapping
+  - Value extraction
+  - Date normalization
+- Detects and parses:
+  - **Amount**
+  - **Category / Subcategory**
+  - **Short Description** (optional)
+  - **Date** (natural language input: *“yesterday”*, *“luni”*, *“last week”* etc.)
+
+### 🗣️ Voice Assistant
+
+- Based on `expo-speech` and `expo-speech-recognition`, with fallback via system dialogs.
+- Supports **Romanian and English** voice input.
+- Full pipeline:  
+  **Voice ➜ Transcription ➜ Text ➜ NLP ➜ Structured Expense**
+- Hands-free commands like:  
+  *“Add 35 RON for groceries today”* are fully supported.
+
+### 📷 OCR Receipt Scanner
+
+- **Hybrid implementation**:
+  - **Primary**: Tesseract.js for offline scanning.
+  - **Secondary**: Asprise API for more accurate parsing when connected.
+- Automatic extraction of:
+  - **Total amount**
+  - **Date** (from receipt header or footer)
+  - **Vendor name / hints**
+- Post-processing pipeline includes:
+  - Noise removal
+  - Keyword grouping
+  - Semantic similarity scoring to classify category
+
+### 🧬 AI-Powered Feedback
+
+- BunnyBuddy detects **spending anomalies** compared to monthly trends.
+- Offers **personalized quests and tips** using a rule-based logic engine.  
+  Example: *“Your food expenses increased by 17% vs. last month”*
+- Generates **adaptive quests** using deviation scoring from historical patterns.
+
 
 ## � Architecture and Technologies
 
@@ -154,8 +202,6 @@ Gamification is completely and subtly integrated into the BunnyBuddy experience:
 - **AI/NLP**: Custom `.ts` files for financial interpretation
 - **OCR**: Tesseract.js
 - **Voice**: expo-speech
-
----
 
 ## 🗂 Code Structure
 
@@ -169,8 +215,6 @@ Gamification is completely and subtly integrated into the BunnyBuddy experience:
 /utils        – Helpers, types, translations, AI classifiers
 ```
 
----
-
 ## 🧪 Local Installation
 ```
 git clone https://github.com/username/BunnyBuddy.git
@@ -180,14 +224,10 @@ npx expo start
 ```
 🔐 Create a Firebase account and add firebaseConfig.ts.
 
----
-
 ## 🛡️ Security
 -Firebase authentication with persistent session.
 -Firestore rules for document-level protection.
 -AsyncStorage for encrypted local storage.
-
----
 
 ## 📸 Demos
 🎞️ [Budget creation](https://drive.google.com/drive/folders/1zD9nYU2fS9u6U8J6LleyPth1kbmpWRdg?dmr=1&ec=wgc-drive-hero-goto)
