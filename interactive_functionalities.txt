@@ -1,0 +1,171 @@
+Interactive Functionalities
+
+1. Quest Generation and Management
+--------------------------------
+a) Quest Generation Logic:
+- Implemented in QuestService.generateQuests()
+- Generates quests based on user spending analysis
+- Types of quests:
+  * Daily: Keep spending under average daily amount
+  * Weekly: Reduce weekend spending
+  * Monthly: Long-term financial goals
+
+b) Quest Personalization:
+- Based on user's spending patterns
+- Difficulty adjusted to user's level
+- Category-specific challenges
+- Dynamic target amounts based on historical data
+
+c) Quest Structure in Firestore:
+```typescript
+interface UserQuest {
+    id: string;
+    userId: string;
+    title: string;
+    description: string;
+    type: 'daily' | 'weekly' | 'monthly' | 'achievement';
+    reward: number;
+    progress: number;
+    target: number;
+    status: 'active' | 'completed' | 'claimed' | 'failed' | 'locked';
+    category?: string;
+    startDate: Date;
+    endDate?: Date;
+    streak?: number;
+    level: number;
+    claimedAt?: Date;
+}
+```
+
+2. Progress Tracking
+-------------------
+a) Progress Update Functions:
+- trackExpense(): Updates quest progress based on expenses
+- updateQuestProgress(): Manually updates quest progress
+- claimQuestReward(): Handles quest completion and rewards
+
+b) Progress Storage:
+- Real-time updates in Firestore
+- Progress tracked per quest
+- Historical data maintained
+- Streak tracking
+
+3. Reward System
+---------------
+a) Reward Types:
+- CarrotCoins (virtual currency)
+- XP points
+- Badges
+- Level progression
+
+b) Reward Distribution:
+- Immediate rewards on quest completion
+- Streak bonuses
+- Level-up rewards
+- Special achievements
+
+4. User Interface
+----------------
+a) Quest Display:
+- Progress bars with percentage
+- Color-coded quest types
+- Detailed quest information
+- Claim buttons for completed quests
+
+b) Visual Feedback:
+- Progress animations
+- Color-coded status indicators
+- Streak counters
+- Level badges
+
+5. Error Handling and Offline Support
+-----------------------------------
+a) Offline Functionality:
+- Local progress tracking
+- Automatic sync when online
+- Conflict resolution
+
+b) Error Recovery:
+- Retry mechanisms for failed updates
+- Data validation
+- Graceful degradation
+
+6. Implementation Details
+------------------------
+a) Quest Generation:
+```typescript
+async generateQuests(userId: string, analysis: SpendingAnalysis): Promise<UserQuest[]> {
+    // Check for existing quests
+    const existingQuests = await this.getActiveQuests(userId);
+    
+    // Generate daily quest if none exists
+    if (!dailyQuestExists) {
+        const dailyQuest: UserQuest = {
+            id: `daily-${now.toISOString().split('T')[0]}-${userId}`,
+            title: 'Daily Budget Master',
+            description: `Keep today's spending under ${analysis.averageDailySpending.toFixed(0)} RON`,
+            type: 'daily',
+            reward: 50,
+            progress: 0,
+            target: analysis.averageDailySpending,
+            status: 'active',
+            startDate: now,
+            endDate: tomorrow,
+            level: 1
+        };
+        quests.push(dailyQuest);
+    }
+    
+    // Save to Firestore
+    const batch = writeBatch(db);
+    quests.forEach(quest => {
+        const questRef = doc(this.questsCollection, quest.id);
+        batch.set(questRef, quest);
+    });
+    await batch.commit();
+}
+```
+
+b) Progress Tracking:
+```typescript
+async trackExpense(userId: string, expense: Expense): Promise<void> {
+    const activeQuests = await this.getActiveQuests(userId);
+    const batch = writeBatch(db);
+    
+    for (const quest of activeQuests) {
+        let shouldUpdate = false;
+        let newProgress = quest.progress;
+        
+        // Update progress based on quest type
+        switch (quest.type) {
+            case 'daily':
+                if (new Date(expense.date).toDateString() === now.toDateString()) {
+                    const todayExpenses = await this.getTodayExpenses(userId);
+                    newProgress = todayExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+                    shouldUpdate = true;
+                }
+                break;
+            // Other quest types...
+        }
+        
+        if (shouldUpdate) {
+            const questRef = doc(this.questsCollection, quest.id);
+            const newStatus = newProgress >= quest.target ? 'completed' : 'active';
+            batch.update(questRef, {
+                progress: newProgress,
+                status: newStatus
+            });
+        }
+    }
+    
+    await batch.commit();
+}
+```
+
+7. Future Improvements
+---------------------
+- Enhanced quest personalization
+- More quest types
+- Social features
+- Advanced reward system
+- Seasonal events 

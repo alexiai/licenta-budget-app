@@ -1,0 +1,243 @@
+# Capitolul 4.4 - Interfața Vocală în BunnyBudget
+
+## 1. Recunoaștere Vocală (Speech-to-Text)
+
+### 1.1 Implementare Tehnică
+```typescript
+// Folosește @react-native-voice/voice pentru recunoaștere vocală
+import Voice from '@react-native-voice/voice';
+
+const initializeSpeechRecognition = () => {
+    Voice.onSpeechStart = onSpeechStart;
+    Voice.onSpeechEnd = onSpeechEnd;
+    Voice.onSpeechResults = onSpeechResults;
+    Voice.onSpeechError = onSpeechError;
+};
+
+const startListening = async () => {
+    try {
+        await Voice.start(userLanguage === 'ro' ? 'ro-RO' : 'en-US');
+    } catch (error) {
+        console.error('Error starting voice recognition:', error);
+    }
+};
+```
+
+### 1.2 Limbi Suportate
+- Română (ro-RO)
+- Engleză (en-US)
+- Detecție automată limbă
+- Comutare dinamică bazată pe input
+
+### 1.3 Comenzi Vocale Recunoscute
+1. Adăugare cheltuieli:
+   - "Am cheltuit 50 lei la magazin"
+   - "I spent 30 dollars on food"
+   - "Plătit 100 lei chirie ieri"
+
+2. Interogări:
+   - "Cât am cheltuit luna aceasta?"
+   - "Show my expenses for this week"
+   - "Care este bugetul rămas?"
+
+3. Navigare:
+   - "Deschide bugetul"
+   - "Show statistics"
+   - "Go to overview"
+
+### 1.4 Gestionare Erori
+```typescript
+const onSpeechError = (error: any) => {
+    setIsListening(false);
+    let errorMessage = 'A apărut o eroare. Încearcă din nou.';
+    
+    switch (error.code) {
+        case 'no_match':
+            errorMessage = 'Nu am înțeles comanda. Te rog repetă.';
+            break;
+        case 'not_allowed':
+            errorMessage = 'Te rog acordă permisiuni pentru microfon.';
+            break;
+        case 'network':
+            errorMessage = 'Verifică conexiunea la internet.';
+            break;
+    }
+    
+    speakText(errorMessage);
+    setErrorMessage(errorMessage);
+};
+```
+
+## 2. Feedback Vocal (Text-to-Speech)
+
+### 2.1 Implementare
+```typescript
+import * as Speech from 'expo-speech';
+
+const speakText = async (text: string, language?: 'en' | 'ro') => {
+    const options: Speech.SpeechOptions = {
+        language: language || userLanguage,
+        pitch: 1.0,
+        rate: 0.9,
+        voice: language === 'ro' ? 'ro-RO-IoanaNeural' : 'en-US-SamanthaNeural'
+    };
+
+    try {
+        await Speech.speak(text, options);
+    } catch (error) {
+        console.error('Error speaking:', error);
+    }
+};
+```
+
+### 2.2 Voci Utilizate
+- Română: 'ro-RO-IoanaNeural'
+- Engleză: 'en-US-SamanthaNeural'
+- Fallback la vocea system default
+
+### 2.3 Tipuri de Feedback Vocal
+1. Confirmări:
+   - "Cheltuială adăugată cu succes"
+   - "Budget updated successfully"
+   - "Categoria a fost modificată"
+
+2. Erori:
+   - "Nu am înțeles suma menționată"
+   - "Please try again"
+   - "Verifică conexiunea la internet"
+
+3. Sugestii:
+   - "Poți spune suma și categoria"
+   - "Try speaking more clearly"
+   - "Specifică și data cheltuielii"
+
+## 3. Integrare cu Chatbot/AI
+
+### 3.1 Arhitectură
+```typescript
+interface VoiceCommandProcessor {
+    processCommand: (command: string) => Promise<CommandResponse>;
+    generateResponse: (result: CommandResult) => string;
+    speakResponse: (response: string) => Promise<void>;
+}
+
+interface CommandResponse {
+    success: boolean;
+    action?: string;
+    params?: Record<string, any>;
+    message: string;
+}
+```
+
+### 3.2 Procesare Comenzi
+1. Flow procesare:
+   - Recunoaștere vocală → text
+   - Detecție intenție și parametri
+   - Execuție comandă
+   - Generare și rostire răspuns
+
+2. Exemple procesare:
+```typescript
+const processVoiceCommand = async (command: string) => {
+    const intent = await detectIntent(command);
+    switch (intent.type) {
+        case 'add_expense':
+            return processExpenseCommand(intent.params);
+        case 'query_budget':
+            return processBudgetQuery(intent.params);
+        case 'navigation':
+            return processNavigationCommand(intent.params);
+        default:
+            return {
+                success: false,
+                message: 'Comandă nerecunoscută'
+            };
+    }
+};
+```
+
+## 4. UX și Accesibilitate
+
+### 4.1 Setări și Configurare
+```typescript
+interface VoiceSettings {
+    enabled: boolean;
+    defaultLanguage: 'ro' | 'en';
+    autoDetectLanguage: boolean;
+    voiceFeedback: boolean;
+    volume: number;
+}
+```
+
+### 4.2 Gestionare Permisiuni
+```typescript
+const checkPermissions = async () => {
+    const { status } = await Voice.requestPermissionsAsync();
+    if (status !== 'granted') {
+        Alert.alert(
+            'Permisiuni necesare',
+            'Pentru a folosi comenzile vocale, te rugăm să acorzi permisiuni pentru microfon.',
+            [
+                { text: 'Mai târziu' },
+                { text: 'Setări', onPress: openSettings }
+            ]
+        );
+        return false;
+    }
+    return true;
+};
+```
+
+### 4.3 Feedback Vizual
+1. Indicatori stare:
+   - Microfon activ/inactiv
+   - Procesare comandă
+   - Eroare recunoaștere
+
+2. Transcripție live:
+   - Afișare text recunoscut
+   - Highlight cuvinte cheie
+   - Indicator încredere recunoaștere
+
+### 4.4 Fallback și Recuperare
+1. Strategii fallback:
+   - Reîncercare automată
+   - Sugestii alternative
+   - Comutare la input manual
+
+2. Recuperare erori:
+   - Reconectare automată
+   - Cache comenzi offline
+   - Retry mecanism pentru network issues
+
+## 5. Optimizări și Îmbunătățiri
+
+### 5.1 Performanță
+- Caching răspunsuri comune
+- Optimizare recunoaștere context
+- Reducere latență feedback
+
+### 5.2 Accesibilitate
+- Suport VoiceOver/TalkBack
+- Contrast și fonturi adaptabile
+- Feedback haptic
+
+### 5.3 Multilingvism
+- Detecție automată limbă
+- Traducere dinamică
+- Adaptare context cultural
+
+## 6. Concluzii
+
+Interfața vocală din BunnyBudget oferă:
+- Recunoaștere vocală robustă în română și engleză
+- Feedback vocal natural și contextual
+- Integrare seamless cu chatbot și AI
+- Experiență accesibilă și intuitivă
+- Fallback mechanisms pentru toate scenariile de eroare
+
+Sistemul este proiectat pentru:
+- Utilizare hands-free completă
+- Adaptare la preferințele utilizatorului
+- Recuperare gracefully din erori
+- Experiență consistentă cross-platform 

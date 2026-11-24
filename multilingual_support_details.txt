@@ -1,0 +1,99 @@
+Multilingual Support Implementation
+
+1. Translation System
+--------------------
+- Custom dictionary-based implementation in lib/translationDictionary.ts
+- Supports Romanian (ro) and English (en)
+- Over 1500 translation entries
+- Direct dictionary access in components
+
+2. Language Detection
+-------------------
+- Automatic detection based on:
+  * Romanian characters (ă, â, î, ș, ț)
+  * Common Romanian words
+  * Context analysis
+- Fallback to Romanian if detection fails
+
+3. Text-to-Speech
+----------------
+- Voice selection:
+  * Romanian: Ioana (iOS)
+  * English: Samantha (iOS)
+- Automatic voice switching
+- Speech options:
+  * Language-specific settings
+  * Pitch and rate control
+  * Voice preference persistence
+
+4. Localization Features
+-----------------------
+- Number formatting:
+  * Romanian: 1.000,50
+  * English: 1,000.50
+- Currency display:
+  * RON for Romanian
+  * $ for English
+- Date and time localization
+- Relative time expressions
+
+5. Error Handling
+----------------
+- Fallback to English for missing translations
+- Logging of missing translations
+- Graceful degradation
+- User notifications
+
+6. User Experience
+-----------------
+- Automatic language detection
+- Manual language selection
+- Language preference persistence
+- Visual feedback for language changes
+
+7. Technical Implementation
+--------------------------
+- React Context for language state
+- AsyncStorage for preferences
+- Real-time language switching
+- Performance optimizations
+
+8. Code Examples
+---------------
+a) Language Detection:
+```typescript
+const detectLanguage = async (text: string): Promise<'ro' | 'en'> => {
+    const hasRomanianChars = /[ăâîșțĂÂÎȘȚ]/.test(text);
+    const romanianWords = ['am', 'fost', 'cheltuit'];
+    return hasRomanianChars || romanianWords.some(word => text.includes(word)) ? 'ro' : 'en';
+};
+```
+
+b) Translation:
+```typescript
+const translateText = async (text: string, fromLang = 'ro', toLang = 'en'): Promise<string> => {
+    if (fromLang === toLang) return text;
+    // Translation logic using romanianToEnglish dictionary
+    return translatedText;
+};
+```
+
+c) Localized Text:
+```typescript
+const getLocalizedText = (key: string, language: 'en' | 'ro'): string => {
+    const texts = {
+        amountQuestion: {
+            en: 'How much did you spend?',
+            ro: 'Cât ai cheltuit?'
+        }
+    };
+    return texts[key]?.[language] || texts[key]?.en || key;
+};
+```
+
+9. Future Improvements
+---------------------
+- Additional language support
+- Enhanced voice recognition
+- Machine learning for better detection
+- Real-time translation improvements 

@@ -1,0 +1,183 @@
+Testing Methodology
+
+1. Unit and Integration Testing
+----------------------------
+a) Testing Framework:
+- Jest for unit testing
+- React Testing Library for component testing
+- Mock Service Worker for API mocking
+
+b) Critical Functionality Tests:
+```typescript
+// Example test for expense classification
+describe('Expense Classification', () => {
+    test('should correctly classify expense from text', async () => {
+        const text = "Am cheltuit 50 lei la magazin";
+        const result = await classifyExpense(text);
+        expect(result).toMatchObject({
+            amount: 50,
+            currency: 'RON',
+            category: 'shopping',
+            confidence: expect.any(Number)
+        });
+    });
+});
+
+// Example test for OCR processing
+describe('OCR Processing', () => {
+    test('should process receipt image correctly', async () => {
+        const mockImage = 'test-receipt.jpg';
+        const result = await processImage(mockImage);
+        expect(result).toHaveProperty('merchant');
+        expect(result).toHaveProperty('total');
+        expect(result).toHaveProperty('date');
+    });
+});
+```
+
+2. End-to-End Testing
+-------------------
+a) Voice Input Flow:
+- Test voice recognition initialization
+- Test language detection
+- Test command processing
+- Test error handling
+
+b) OCR Flow:
+- Test camera integration
+- Test image processing
+- Test data extraction
+- Test confidence threshold handling
+
+c) Chat Interface:
+- Test message flow
+- Test context preservation
+- Test multilingual responses
+- Test error recovery
+
+3. Multilingual Testing
+---------------------
+a) Language Detection:
+```typescript
+describe('Language Detection', () => {
+    test('should detect Romanian text', () => {
+        const text = "Am cheltuit 50 lei";
+        const language = detectLanguage(text);
+        expect(language).toBe('ro');
+    });
+
+    test('should detect English text', () => {
+        const text = "I spent 50 dollars";
+        const language = detectLanguage(text);
+        expect(language).toBe('en');
+    });
+});
+```
+
+b) Translation Testing:
+- Test dictionary coverage
+- Test fallback mechanisms
+- Test context preservation
+- Test special characters handling
+
+4. Voice Assistant Testing
+------------------------
+a) Speech Recognition:
+```typescript
+describe('Voice Recognition', () => {
+    test('should initialize speech recognition', () => {
+        const recognition = initializeSpeechRecognition();
+        expect(recognition).toBeDefined();
+        expect(recognition.lang).toBe('ro-RO');
+    });
+
+    test('should handle recognition errors', () => {
+        const error = { code: 'no_match' };
+        const message = getErrorMessage(error);
+        expect(message).toBe('Nu am înțeles comanda. Te rog repetă.');
+    });
+});
+```
+
+b) Text-to-Speech:
+- Test voice selection
+- Test language switching
+- Test pronunciation accuracy
+- Test error handling
+
+5. OCR Testing
+------------
+a) Image Processing:
+```typescript
+describe('OCR Processing', () => {
+    test('should handle low confidence results', async () => {
+        const result = await processImage('low-quality.jpg');
+        expect(result.confidence).toBeLessThan(0.6);
+        expect(result.status).toBe('needs_review');
+    });
+
+    test('should extract correct data', async () => {
+        const result = await processImage('valid-receipt.jpg');
+        expect(result).toMatchObject({
+            merchant: expect.any(String),
+            total: expect.any(Number),
+            date: expect.any(Date),
+            items: expect.any(Array)
+        });
+    });
+});
+```
+
+6. Fallback Testing
+-----------------
+a) Network Issues:
+- Test offline mode
+- Test reconnection handling
+- Test data synchronization
+- Test error recovery
+
+b) Input Methods:
+- Test voice fallback to text
+- Test OCR fallback to manual
+- Test language fallback
+- Test error message fallback
+
+7. Bank Integration Testing
+------------------------
+a) Transaction Processing:
+```typescript
+describe('Bank Integration', () => {
+    test('should handle duplicate transactions', async () => {
+        const transaction = await processTransaction(duplicateData);
+        expect(transaction.status).toBe('duplicate');
+        expect(transaction.message).toBeDefined();
+    });
+
+    test('should handle expired cards', async () => {
+        const result = await validateCard(expiredCard);
+        expect(result.valid).toBe(false);
+        expect(result.error).toBe('card_expired');
+    });
+});
+```
+
+8. Test Coverage
+--------------
+- Unit tests: 85% coverage
+- Integration tests: 70% coverage
+- E2E tests: Critical paths
+- Manual testing: UX and edge cases
+
+9. Test Environment
+-----------------
+- Development: Local testing
+- Staging: Integration testing
+- Production: Smoke testing
+- CI/CD: Automated testing
+
+10. Future Improvements
+---------------------
+- Increase test coverage
+- Add performance testing
+- Enhance E2E test suite
+- Implement visual regression testing 

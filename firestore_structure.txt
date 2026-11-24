@@ -1,0 +1,282 @@
+# Structura Bază de Date Firestore în BunnyBudget
+
+## 1. Colecții Principale
+
+### 1.1 Users Collection
+```typescript
+interface User {
+    id: string;                // UID from Firebase Auth
+    name: string;              // Prenume
+    surname: string;           // Nume
+    email: string;            
+    createdAt: Timestamp;      // Data creării contului
+    lastLogin: Timestamp;      // Ultima autentificare
+    settings: {
+        language: 'ro' | 'en';
+        theme: 'light' | 'dark' | 'system';
+        notifications: boolean;
+        currency: string;      // Default: 'RON'
+    };
+    gamification: {
+        carrotCoins: number;   // Monede virtuale
+        level: number;         // Nivel curent
+        xp: number;           // Experiență acumulată
+        achievements: string[]; // ID-uri achievement-uri deblocate
+    };
+    stats: {
+        totalBudgets: number;
+        totalExpenses: number;
+        savingsRate: number;
+        lastAnalysis: Timestamp;
+    };
+}
+```
+
+### 1.2 Budgets Collection
+```typescript
+interface Budget {
+    id: string;
+    userId: string;           // Referință către user
+    name: string;            
+    period: 'monthly' | 'weekly';
+    startDay: number;         // Ziua de început (1-31)
+    amount: number;           // Suma totală bugetată
+    income: number;           // Venit lunar/săptămânal
+    categories: {
+        [categoryId: string]: {
+            name: string;
+            limit: number;    // Limită cheltuieli
+            color: string;    // Cod culoare
+            icon: string;     // Nume icon
+            subcategories: {
+                name: string;
+                limit?: number;
+            }[];
+        };
+    };
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+    currency: string;         // Valuta bugetului
+    archived: boolean;        // Status arhivare
+}
+```
+
+### 1.3 Expenses Collection
+```typescript
+interface Expense {
+    id: string;
+    userId: string;          // Referință către user
+    budgetId: string;        // Referință către budget
+    amount: number;
+    category: string;        // ID categorie
+    subcategory?: string;    // Subcategorie (opțional)
+    date: Timestamp;         // Data cheltuielii
+    note: string;            // Notă/descriere
+    source: 'manual' | 'ocr' | 'voice' | 'bank';
+    currency: string;        // Valuta tranzacției
+    originalAmount?: number; // Suma în valuta originală
+    attachments?: {         // Documente atașate
+        type: 'receipt' | 'invoice' | 'other';
+        url: string;
+        uploadedAt: Timestamp;
+    }[];
+    metadata?: {            // Metadata pentru OCR/Voice
+        confidence: number;
+        rawText?: string;
+        merchant?: string;
+    };
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+}
+```
+
+### 1.4 Missions Collection
+```typescript
+interface Mission {
+    id: string;
+    userId: string;         // Referință către user
+    type: MissionType;      // Tipul misiunii
+    status: 'active' | 'completed' | 'failed';
+    requirements: {
+        target: number;     // Ținta de atins
+        category?: string;  // Categorie specifică (opțional)
+        duration: number;   // Durata în zile
+    };
+    progress: {
+        current: number;    // Progres curent
+        history: {          // Istoric progres
+            value: number;
+            date: Timestamp;
+        }[];
+        lastUpdate: Timestamp;
+    };
+    reward: {
+        coins: number;      // CarrotCoins acordate
+        xp: number;        // Experiență acordată
+    };
+    startedAt: Timestamp;
+    expiresAt: Timestamp;
+}
+```
+
+### 1.5 Analytics Collection
+```typescript
+interface Analytics {
+    id: string;
+    userId: string;
+    period: 'daily' | 'weekly' | 'monthly';
+    date: Timestamp;
+    metrics: {
+        totalSpent: number;
+        savingsRate: number;
+        categoryBreakdown: {
+            [category: string]: number;
+        };
+        trends: {
+            direction: 'up' | 'down';
+            percentage: number;
+            category: string;
+        }[];
+    };
+    insights: {
+        type: 'warning' | 'achievement' | 'tip';
+        message: string;
+        severity: 'high' | 'medium' | 'low';
+        category?: string;
+        confidence: number;
+    }[];
+    generatedAt: Timestamp;
+}
+```
+
+## 2. Relații între Colecții
+
+### 2.1 Diagrama Relații
+```
+User 1:N Budgets
+Budget 1:N Expenses
+User 1:N Missions
+User 1:N Analytics
+```
+
+### 2.2 Referințe și Integritate
+- Toate documentele conțin userId pentru securitate
+- budgetId în Expenses pentru grupare
+- Referințe soft delete pentru arhivare
+
+## 3. Indexare și Optimizare
+
+### 3.1 Indexuri Compuse
+```javascript
+// firebase.indexes.json
+{
+  "indexes": [
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "budgetId", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    }
+  ]
+}
+```
+
+### 3.2 Query-uri Optimizate
+```typescript
+// Exemple query-uri optimizate
+const getRecentExpenses = (userId: string, limit: number = 10) => {
+    return query(
+        collection(db, 'expenses'),
+        where('userId', '==', userId),
+        orderBy('date', 'desc'),
+        limit(limit)
+    );
+};
+
+const getCategoryExpenses = (budgetId: string, category: string) => {
+    return query(
+        collection(db, 'expenses'),
+        where('budgetId', '==', budgetId),
+        where('category', '==', category),
+        orderBy('date', 'desc')
+    );
+};
+```
+
+## 4. Considerații de Performanță
+
+### 4.1 Strategii de Caching
+- Caching local pentru date frecvent accesate
+- Invalidare cache la modificări
+- Sincronizare periodică pentru analytics
+
+### 4.2 Batch Operations
+```typescript
+// Exemplu batch update
+const batch = writeBatch(db);
+// Update budget
+batch.update(budgetRef, { amount: newAmount });
+// Add expense
+batch.set(expenseRef, newExpense);
+// Update user stats
+batch.update(userRef, { 
+    'stats.totalExpenses': increment(1) 
+});
+await batch.commit();
+```
+
+## 5. Securitate și Reguli
+
+### 5.1 Reguli Firestore
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // User data
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+    }
+    
+    // Budgets
+    match /budgets/{budgetId} {
+      allow read, write: if request.auth.uid == resource.data.userId;
+    }
+    
+    // Expenses
+    match /expenses/{expenseId} {
+      allow read: if request.auth.uid == resource.data.userId;
+      allow write: if request.auth.uid == request.resource.data.userId
+                   && validateExpense(request.resource.data);
+    }
+    
+    // Missions
+    match /missions/{missionId} {
+      allow read: if request.auth.uid == resource.data.userId;
+      allow write: if false;  // Doar cloud functions
+    }
+  }
+}
+```
+
+## 6. Backup și Recuperare
+
+### 6.1 Strategii de Backup
+- Export zilnic al datelor
+- Retenție 30 zile
+- Backup înainte de migrări
+
+### 6.2 Recuperare Date
+- Restore point-in-time
+- Migrare date între medii
+- Validare integritate 
