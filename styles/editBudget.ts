@@ -1,0 +1,101 @@
+// editBudget.ts
+import { StyleSheet } from 'react-native';
+
+export default StyleSheet.create({
+    section: {
+        marginLeft: 20,
+        marginRight: 20,
+        fontSize: 25,
+        fontWeight: 'bold',
+        color: '#52366b',
+        marginTop: 24,
+        fontFamily: 'Fredoka',
+    },
+    itemRow: {
+        marginLeft: 20,
+        marginRight: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF2CC',
+        padding: 15,
+        borderRadius: 12,
+        borderColor: '#eda82f',
+        borderWidth: 2,
+        marginBottom: 10,
+        flexWrap: 'nowrap',
+        overflow: 'hidden',
+
+    },
+    dragIcon: {
+        marginRight: 10,
+    },
+    categoryIcon: {
+        width: 30,
+        height: 30,
+        marginRight: 10,
+    },
+    itemText: {
+        fontSize: 18,
+        color: '#52366b',
+        fontFamily: 'Fredoka',
+        flex: 1,
+        flexShrink: 1,
+        minWidth: 0,
+
+    },
+    itemAmount: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#D45920',
+        fontFamily: 'Fredoka',
+        minWidth: 70,
+        maxWidth: 90,
+        flexShrink: 0,
+        textAlign: 'right',
+        marginRight: 10,
+    },
+    addSubBtn: {
+        marginLeft: 20,
+        marginRight: 20,
+        backgroundColor: '#ffe599',
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: '#eda82f',
+        alignItems: 'center',
+        marginTop: 10,
+        marginBottom: 20,
+    },
+    addSubText: {
+        color: '#91483c',
+        fontFamily: 'Fredoka',
+        fontWeight: 'bold',
+        fontSize: 15,
+    },
+    subGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginHorizontal: 20,
+        gap: 10,
+    },
+    subPill: {
+        paddingVertical: 6,
+        paddingHorizontal: 14,
+        backgroundColor: '#fff2cc',
+        borderRadius: 20,
+        borderWidth: 2,
+        borderColor: '#eda82f',
+    },
+    subPillText: {
+        fontFamily: 'Fredoka',
+        color: '#52366b',
+        fontWeight: 'bold',
+    },
+    disabledText: {
+        fontStyle: 'italic',
+        color: '#999',
+        marginVertical: 8,
+        marginLeft: 20,
+    },
+});
